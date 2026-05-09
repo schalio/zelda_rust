@@ -1,0 +1,8 @@
+[package]
+name = "zelda_rust"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+sdl2 = { version = "0.37.0", features = ["image", "mixer", "ttf"] }
+roxmltree = "0.20.0"
