@@ -10,6 +10,7 @@ pub mod map_loader;
 pub mod combat;
 pub mod hud;
 pub mod audio;
+pub mod objects;
 
 use camera::Camera;
 use player::{Player, DeathState};
@@ -18,9 +19,10 @@ use enemy::Enemy;
 use enemy_type::EnemyKind;
 use tile_properties::TileTable;
 use map_loader::{load_tmx, SpawnKind, SpawnPoint};
-use combat::{resolve_enemy_contact, resolve_player_attack};
+use combat::{resolve_enemy_contact, resolve_player_attack, resolve_object_contact};
 use hud::{Hud, FONT_SIZE};
 use audio::AudioManager;
+use objects::{render_objects, resolve_chest_collision};
 
 use sdl2::event::Event;
 use sdl2::keyboard::Keycode;
@@ -70,7 +72,7 @@ fn main() -> Result<(), String> {
     let enemy_sheet = texture_creator.load_texture("assets/sprites/enemies.png")?;
     let slash_sheet = texture_creator.load_texture("assets/sprites/sword_slash.png")?;
     let vanish_sheet = texture_creator.load_texture("assets/sprites/vanish.png")?;
-
+    let objects_sheet = texture_creator.load_texture("assets/sprites/objects.png")?;
 /*
     // --- Carte ---
     #[rustfmt::skip]
@@ -105,6 +107,7 @@ fn main() -> Result<(), String> {
     // Les couches : 0 = sol (collisions), 1+ = décor au-dessus
     // On utilise la première couche pour les collisions
     let ground_layer = &map_file.layers[0].tilemap;
+    let mut objects = map_file.objects;
 /*
     // --- Joueur ---
     let mut player = Player::new(
@@ -176,6 +179,7 @@ fn main() -> Result<(), String> {
         let player_events = player.update(dt, &kb, &ground_layer, &tile_table);
         player.clamp_to_map(ground_layer.pixel_width(), ground_layer.pixel_height());
 
+
         if player_events.sword_swing {audio.play_sword();}
 
         camera.center_on(
@@ -199,6 +203,8 @@ fn main() -> Result<(), String> {
             separate_enemies(&mut enemies, &ground_layer, &tile_table);
             resolve_enemy_contact(&mut player, &mut enemies, &audio);
             resolve_player_attack(&player, &mut enemies, &audio);
+            resolve_object_contact(&mut player, &mut objects, &audio);
+            resolve_chest_collision(&mut player, &objects);
 
 
             // Nettoyer les ennemis morts dont l'animation est terminée
@@ -252,6 +258,9 @@ fn main() -> Result<(), String> {
                 tile_table.tiles_per_row,
             )?;
         }
+
+        // 1.1 Objets au sol  ← nouveau
+        render_objects(&objects, &mut canvas, &objects_sheet, &camera)?;
 
         // 2. Ennemis
         for enemy in enemies.iter() {

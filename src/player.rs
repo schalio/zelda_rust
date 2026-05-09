@@ -127,6 +127,9 @@ pub struct Player {
     pub is_attacking: bool,
     attack_timer: f32,
     pub attack_anim_frame: u32,
+    
+    pub rubies: i32,
+    pub keys: i32,
 }
 
 impl Player {
@@ -153,6 +156,8 @@ impl Player {
             spin_timer:   0.0,
             vanish_timer: 0.0,
             vanish_frame: 0,
+            rubies: 0,
+            keys: 0,
         }
     }
 

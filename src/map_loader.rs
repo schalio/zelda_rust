@@ -7,6 +7,7 @@ pub struct MapFile {
     pub tileset_path: String,
     pub firstgid: u32,
     pub spawn_points: Vec<SpawnPoint>,
+    pub objects: Vec<MapObject>,
 }
 
 pub struct TiledLayer {
@@ -120,7 +121,55 @@ pub fn load_tmx(path: &str) -> Result<MapFile, String> {
         }
     }
 
-    Ok(MapFile { layers, tileset_path, firstgid, spawn_points })
+    let mut objects: Vec<MapObject> = Vec::new();
+
+    for og in root.children().filter(|n| n.has_tag_name("objectgroup")) {
+        if og.attribute("name").unwrap_or("") != "objects" { continue; }
+
+        for obj in og.children().filter(|n| n.has_tag_name("object")) {
+            let x = obj.attribute("x")
+                .and_then(|v| v.parse::<f32>().ok())
+                .unwrap_or(0.0) * TILE_SCALE as f32;
+            let y = obj.attribute("y")
+                .and_then(|v| v.parse::<f32>().ok())
+                .unwrap_or(0.0) * TILE_SCALE as f32;
+
+            let class = obj.attribute("class")
+                .or_else(|| obj.attribute("type"))
+                .unwrap_or("");
+
+            // Lecture de la propriété "contains" pour les coffres
+            let contains_prop = obj
+                .descendants()
+                .find(|n| n.has_tag_name("property")
+                    && n.attribute("name") == Some("contains"))
+                .and_then(|n| n.attribute("value"))
+                .unwrap_or("ruby");
+
+            let kind = match class {
+                "heart" => ObjectKind::Heart,
+                "ruby"  => ObjectKind::Ruby,
+                "key"   => ObjectKind::Key,
+                "chest" => {
+                    let loot = match contains_prop {
+                        "heart" => LootKind::Heart,
+                        "key"   => LootKind::Key,
+                        _       => LootKind::Ruby,
+                    };
+                    ObjectKind::Chest { contains: loot }
+                }
+                other => {
+                    println!("⚠ objet inconnu : '{other}' ignoré");
+                    continue;
+                }
+            };
+
+            objects.push(MapObject { x, y, kind, collected: false });
+        }
+    }
+
+
+    Ok(MapFile { layers, tileset_path, firstgid, spawn_points, objects })
 }
 
 fn parse_csv_layer(
@@ -193,4 +242,27 @@ pub struct SpawnPoint {
     pub x: f32,
     pub y: f32,
     pub kind: SpawnKind,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum ObjectKind {
+    Heart,
+    Ruby,
+    Key,
+    Chest { contains: LootKind },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum LootKind {
+    Heart,
+    Ruby,
+    Key,
+}
+
+#[derive(Debug, Clone)]
+pub struct MapObject {
+    pub x: f32,
+    pub y: f32,
+    pub kind: ObjectKind,
+    pub collected: bool,
 }

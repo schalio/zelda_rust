@@ -4,6 +4,9 @@
 use crate::audio::AudioManager;
 use crate::player::{Player, DeathState};
 use crate::enemy::Enemy;
+use crate::map_loader::{MapObject, ObjectKind, LootKind};
+
+const PICKUP_RANGE: f32 = crate::tilemap::TILE_DRAW_SIZE as f32 * 0.6;
 
 /// Teste si deux rectangles AABB se chevauchent.
 /// Chaque rectangle est défini par son centre (cx, cy) et ses demi-dimensions.
@@ -86,4 +89,41 @@ pub fn resolve_player_attack(player: &Player, enemies: &mut [Enemy], audio: &Aud
 
         }
     }
+}
+
+pub fn resolve_object_contact(player: &mut Player, objects: &mut Vec<MapObject>, audio: &AudioManager) {
+    if !player.is_alive() { return; }
+
+    let mut to_spawn: Vec<MapObject> = Vec::new();
+
+    for obj in objects.iter_mut() {
+        if obj.collected { continue; }
+
+        let dx = player.x - obj.x;
+        let dy = player.y - obj.y;
+        if (dx * dx + dy * dy).sqrt() > PICKUP_RANGE { continue; }
+
+        match obj.kind {
+            ObjectKind::Heart                  => { player.hp = (player.hp + 2).min(player.max_hp); obj.collected = true; audio.play_pickup_heart(); }
+            ObjectKind::Ruby                   => { player.rubies += 1; obj.collected = true; audio.play_pickup_ruby(); }
+            ObjectKind::Key                    => { player.keys += 1;   obj.collected = true; audio.play_pickup_ruby();}
+            ObjectKind::Chest { contains }     => {
+                obj.collected = true;
+                audio.play_chest_open();
+                to_spawn.push(MapObject {
+                    x: obj.x,
+                    y: obj.y - crate::tilemap::TILE_DRAW_SIZE as f32 * 0.5,
+                    kind: match contains {
+                        LootKind::Heart => ObjectKind::Heart,
+                        LootKind::Ruby  => ObjectKind::Ruby,
+                        LootKind::Key   => ObjectKind::Key,
+                    },
+                    collected: false,
+                });
+            }
+        }
+    }
+
+    objects.extend(to_spawn);
+    objects.retain(|o| !o.collected || matches!(o.kind, ObjectKind::Chest { .. }));
 }
