@@ -2,7 +2,7 @@
 
 /// Les différents types d'ennemis disponibles.
 /// Chaque type correspond à une ligne dans le spritesheet des ennemis.
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, Copy, PartialEq, Debug)]
 pub enum EnemyKind {
     Slime,   // Lent, faible, patrouille courte
     Goblin,  // Rapide, agressif, grande zone de détection

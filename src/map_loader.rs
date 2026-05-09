@@ -1,11 +1,12 @@
 // src/map_loader.rs
 
-use crate::tilemap::{Tilemap, TileIndex, EMPTY_TILE};
+use crate::tilemap::{Tilemap, TileIndex, EMPTY_TILE, TILE_SCALE};
 
 pub struct MapFile {
     pub layers: Vec<TiledLayer>,
     pub tileset_path: String,
     pub firstgid: u32,
+    pub spawn_points: Vec<SpawnPoint>,
 }
 
 pub struct TiledLayer {
@@ -82,7 +83,44 @@ pub fn load_tmx(path: &str) -> Result<MapFile, String> {
         return Err(format!("Aucune couche trouvée dans '{path}'"));
     }
 
-    Ok(MapFile { layers, tileset_path, firstgid })
+    // Parsing du layer spawns (objectgroup)
+    let mut spawn_points: Vec<SpawnPoint> = Vec::new();
+
+    for og in root.children().filter(|n| n.has_tag_name("objectgroup")) {
+        if og.attribute("name").unwrap_or("") != "spawns" { continue; }
+
+        for obj in og.children().filter(|n| n.has_tag_name("object")) {
+            let x = obj.attribute("x")
+                .and_then(|v| v.parse::<f32>().ok())
+                .unwrap_or(0.0);
+            let y = obj.attribute("y")
+                .and_then(|v| v.parse::<f32>().ok())
+                .unwrap_or(0.0);
+
+            // Tiled ≥ 1.9 : "class" | Tiled < 1.9 : "type"
+            let class = obj.attribute("class")
+                .or_else(|| obj.attribute("type"))
+                .unwrap_or("");
+
+            let kind = match class {
+                "player" => SpawnKind::Player,
+                "slime"  => SpawnKind::Enemy(crate::enemy_type::EnemyKind::Slime),
+                "goblin" => SpawnKind::Enemy(crate::enemy_type::EnemyKind::Goblin),
+                "knight" => SpawnKind::Enemy(crate::enemy_type::EnemyKind::Knight),
+                other    => {
+                    println!("⚠ spawn inconnu : '{other}' ignoré");
+                    continue;
+                }
+            };
+
+            spawn_points.push(SpawnPoint {
+                x: x * TILE_SCALE as f32,
+                y: y * TILE_SCALE as f32,
+                kind });
+        }
+    }
+
+    Ok(MapFile { layers, tileset_path, firstgid, spawn_points })
 }
 
 fn parse_csv_layer(
@@ -140,4 +178,19 @@ fn resolve_relative_path(parent_path: &str, relative: &str) -> String {
         .join(relative)
         .to_string_lossy()
         .into_owned()
+}
+
+// src/map_loader.rs
+
+#[derive(Debug, Clone, Copy)]
+pub enum SpawnKind {
+    Player,
+    Enemy(crate::enemy_type::EnemyKind),
+}
+
+#[derive(Debug, Clone)]
+pub struct SpawnPoint {
+    pub x: f32,
+    pub y: f32,
+    pub kind: SpawnKind,
 }

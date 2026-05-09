@@ -17,7 +17,7 @@ use tilemap::{Tilemap, TILE_DRAW_SIZE};
 use enemy::Enemy;
 use enemy_type::EnemyKind;
 use tile_properties::TileTable;
-use map_loader::load_tmx;
+use map_loader::{load_tmx, SpawnKind, SpawnPoint};
 use combat::{resolve_enemy_contact, resolve_player_attack};
 use hud::{Hud, FONT_SIZE};
 use audio::AudioManager;
@@ -105,7 +105,7 @@ fn main() -> Result<(), String> {
     // Les couches : 0 = sol (collisions), 1+ = décor au-dessus
     // On utilise la première couche pour les collisions
     let ground_layer = &map_file.layers[0].tilemap;
-
+/*
     // --- Joueur ---
     let mut player = Player::new(
         ground_layer.pixel_width() / 2.0,
@@ -118,6 +118,23 @@ fn main() -> Result<(), String> {
         Enemy::new(15.0 * TILE_DRAW_SIZE as f32, 3.0 * TILE_DRAW_SIZE as f32, EnemyKind::Knight),
         Enemy::new(5.0 * TILE_DRAW_SIZE as f32, 12.0 * TILE_DRAW_SIZE as f32, EnemyKind::Slime),
     ];
+*/
+    let player_spawn = map_file.spawn_points.iter()
+        .find(|sp| matches!(sp.kind, SpawnKind::Player))
+        .expect("❌ Aucun spawn 'player' dans la map !");
+
+    let mut player = Player::new(player_spawn.x, player_spawn.y);
+
+    let mut enemies: Vec<Enemy> = map_file.spawn_points.iter()
+        .filter_map(|sp| {
+            if let SpawnKind::Enemy(kind) = sp.kind {
+                Some(Enemy::new(sp.x, sp.y, kind))
+            } else {
+                None
+            }
+        })
+        .collect();
+
 
 
     // --- Caméra ---
