@@ -20,6 +20,7 @@ fn sprite_col(kind: &ObjectKind) -> Option<u32> {
         ObjectKind::Ruby               => Some(1),
         ObjectKind::Key                => Some(2),
         ObjectKind::Chest { .. }       => Some(3),
+        ObjectKind::HeartPiece { .. }  => Some(5),
         ObjectKind::Transition { .. } => None,
     }
 }
@@ -33,8 +34,12 @@ pub fn render_objects(
     for obj in objects {
         // Les coffres ouverts (collected=true) affichent le sprite ouvert col 4
         // Les autres objets collectés sont déjà retirés de la liste
+        if obj.collected && !matches!(obj.kind, ObjectKind::Chest { .. }) {
+            continue;  // ← HeartPiece collecté = invisible
+        }
+
         let col = if matches!(obj.kind, ObjectKind::Chest { .. }) && obj.collected {
-            4  // sprite coffre ouvert
+            4  // coffre ouvert
         } else {
             match sprite_col(&obj.kind) {
                 Some(c) => c,

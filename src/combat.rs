@@ -92,8 +92,11 @@ pub fn resolve_player_attack(player: &Player, enemies: &mut [Enemy], audio: &Aud
     }
 }
 
-pub fn resolve_object_contact(player: &mut Player, objects: &mut Vec<MapObject>, audio: &AudioManager) {
-    if !player.is_alive() { return; }
+pub fn resolve_object_contact(player: &mut Player, objects: &mut Vec<MapObject>, audio: &AudioManager) -> bool {
+    
+    let mut collected = false;
+    
+    if !player.is_alive() { collected = false; }
 
     let mut to_spawn: Vec<MapObject> = Vec::new();
 
@@ -105,9 +108,9 @@ pub fn resolve_object_contact(player: &mut Player, objects: &mut Vec<MapObject>,
         if (dx * dx + dy * dy).sqrt() > PICKUP_RANGE { continue; }
 
         match obj.kind {
-            ObjectKind::Heart                  => { player.hp = (player.hp + 2).min(player.max_hp); obj.collected = true; audio.play_pickup_heart(); }
-            ObjectKind::Ruby                   => { player.rubies += 1; obj.collected = true; audio.play_pickup_ruby(); }
-            ObjectKind::Key                    => { player.keys += 1;   obj.collected = true; audio.play_pickup_ruby();}
+            ObjectKind::Heart                  => { player.hp = (player.hp + 2).min(player.max_hp); obj.collected = true; audio.play_pickup_heart(); collected = true; },
+            ObjectKind::Ruby                   => { player.rubies += 1; obj.collected = true; audio.play_pickup_ruby(); collected = true; },
+            ObjectKind::Key                    => { player.keys += 1;   obj.collected = true; audio.play_pickup_ruby(); collected = true; },
             ObjectKind::Chest { contains }     => {
                 obj.collected = true;
                 audio.play_chest_open();
@@ -123,11 +126,20 @@ pub fn resolve_object_contact(player: &mut Player, objects: &mut Vec<MapObject>,
                 });
             }
             ObjectKind::Transition { .. } => {}
+            ObjectKind::HeartPiece => {
+                player.max_hp += 2;
+                player.hp = (player.hp + 2).min(player.max_hp); // soigne aussi
+                obj.collected = true;
+                audio.play_pickup_heart(); // son dédié ou réutilisez heart
+                collected = true;
+            }
         }
     }
 
     objects.extend(to_spawn);
-    objects.retain(|o| !o.collected || matches!(o.kind, ObjectKind::Chest { .. }));
+    objects.retain(|o| !o.collected || matches!(o.kind, ObjectKind::Chest { .. } | ObjectKind::HeartPiece));
+    
+    collected
 }
 
 pub fn check_transition(

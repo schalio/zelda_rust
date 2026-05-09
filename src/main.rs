@@ -12,24 +12,25 @@ pub mod hud;
 pub mod audio;
 pub mod objects;
 
-use camera::Camera;
-use player::{Player, DeathState};
-use tilemap::{Tilemap, TILE_DRAW_SIZE, TILE_SCALE};
-use enemy::Enemy;
-use enemy_type::EnemyKind;
-use tile_properties::TileTable;
-use map_loader::{load_tmx, MapFile, SpawnKind, SpawnPoint};
-use combat::{resolve_enemy_contact, resolve_player_attack, resolve_object_contact, check_transition};
-use hud::{Hud, FONT_SIZE};
 use audio::AudioManager;
+use camera::Camera;
+use combat::{check_transition, resolve_enemy_contact, resolve_object_contact, resolve_player_attack};
+use enemy::Enemy;
+use hud::{Hud, FONT_SIZE};
+use map_loader::{load_tmx, MapFile, SpawnKind, ObjectKind};
 use objects::{render_objects, resolve_chest_collision};
+use player::{DeathState, Player};
+use tile_properties::TileTable;
+use tilemap::Tilemap;
 
 use sdl2::event::Event;
-use sdl2::keyboard::Keycode;
-use sdl2::pixels::Color;
 use sdl2::image::LoadTexture;
+use sdl2::keyboard::Keycode;
 use sdl2::mixer;
+use sdl2::pixels::Color;
 use std::time::{Duration, Instant};
+use std::collections::HashMap;
+use sdl2::rect::Rect;
 
 const WINDOW_WIDTH: u32 = 800;
 const WINDOW_HEIGHT: u32 = 600;
@@ -97,7 +98,7 @@ fn main() -> Result<(), String> {
 */
     // --- Chargement Tiled ---
     //let map_file   = load_tmx("assets/maps/zelda_test.tmx")?;
-    let (mut map_file, mut tile_table, mut tileset_png) = load_map("zelda_test")?;
+    let (mut map_file, mut tile_table, tileset_png) = load_map("zelda_test")?;
     let mut tileset  = texture_creator.load_texture(&tileset_png)?;
     // println!("{}", map_file.tileset_path);
     // let tile_table = TileTable::from_tsx(&map_file.tileset_path)?;
@@ -156,13 +157,22 @@ fn main() -> Result<(), String> {
         &font,
         "assets/sprites/hearts.png",
         "assets/sprites/objects.png",
-        player.max_hp,
+        // player.max_hp,
     )?;
+
+    let mut collected_objects: HashMap<String, Vec<(i32, i32)>> = HashMap::new();
+
+    let mut current_map_name = "zelda_test".to_string();
+
+    let mut flash_timer: f32 = 0.0;
+    const FLASH_DURATION: f32 = 0.3;
+
 
 
     'game_loop: loop {
         let now = Instant::now();
         let dt = now.duration_since(last_frame_time).as_secs_f32();
+        flash_timer = (flash_timer - dt).max(0.0);
         last_frame_time = now;
 
         // --- Événements ---
@@ -170,13 +180,26 @@ fn main() -> Result<(), String> {
             match event {
                 Event::Quit { .. } => break 'game_loop,
                 Event::KeyDown { keycode: Some(Keycode::Escape), .. } => break 'game_loop,
+                Event::KeyDown { keycode: Some(Keycode::M), .. } => {
+                    if mixer::Music::is_paused() {
+                        audio.resume_music();
+                    } else {
+                        audio.pause_music();
+                    }
+                }
+
                 _ => {}
             }
         }
 
         if let Some((target_map, target_entry)) = check_transition(&player, &objects) {
+
+            // println!("→ transition vers {target_map}, current={current_map_name}");
+
             let target_map   = target_map.clone();
             let target_entry = target_entry.clone();
+
+            save_collected(&objects, &current_map_name, &mut collected_objects);
 
             let (new_map, new_table, new_png) = load_map(&target_map)?;
 
@@ -192,6 +215,11 @@ fn main() -> Result<(), String> {
 
             tileset    = texture_creator.load_texture(&new_png)?;
             objects    = new_map.objects.clone();
+
+            apply_collected(&mut objects, &target_map, &collected_objects);
+
+            current_map_name = target_map;
+
             enemies    = new_map.spawn_points.iter()
                 .filter_map(|sp| {
                     if let SpawnKind::Enemy(kind) = sp.kind {
@@ -234,7 +262,10 @@ fn main() -> Result<(), String> {
             separate_enemies(&mut enemies, &ground_layer, &tile_table);
             resolve_enemy_contact(&mut player, &mut enemies, &audio);
             resolve_player_attack(&player, &mut enemies, &audio);
-            resolve_object_contact(&mut player, &mut objects, &audio);
+            if resolve_object_contact(&mut player, &mut objects, &audio) {
+                flash_timer = FLASH_DURATION;
+            }
+
             resolve_chest_collision(&mut player, &objects);
 
 
@@ -244,25 +275,21 @@ fn main() -> Result<(), String> {
         }
         // Vérifier game over
         // main.rs — remplacez le bloc game over par :
+        // Remplacez le bloc DeathState::Done par :
         if player.death_state == DeathState::Done {
-            // Attendre que le son de mort soit terminé avant de quitter
-            std::thread::sleep(Duration::from_millis(100)); // laisser démarrer
-
-            let deadline = Instant::now()
-                + Duration::from_secs(3);
-
+            // Attente son de mort (existant)
+            let deadline = Instant::now() + Duration::from_secs(3);
             loop {
                 if !mixer::Channel(audio::CHANNEL_PLAYER_DEATH).is_playing()
-                    || Instant::now() > deadline
-                {
-                    break;
-                }
+                    || Instant::now() > deadline { break; }
                 std::thread::sleep(Duration::from_millis(30));
             }
 
+            // Écran game over
+            game_over_screen(&mut canvas, &texture_creator, &ttf_context, &mut event_pump)?;
             break 'game_loop;
         }
-
+/*
         for event in event_pump.poll_iter() {
             match event {
                 Event::KeyDown { keycode: Some(Keycode::M), .. } => {
@@ -275,7 +302,7 @@ fn main() -> Result<(), String> {
                 _ => {}
             }
         }
-        
+*/
         // --- Rendu ---
         canvas.set_draw_color(Color::RGB(0, 0, 0));
         canvas.clear();
@@ -304,8 +331,17 @@ fn main() -> Result<(), String> {
         player.render(&mut canvas, &spritesheet, &slash_sheet, &vanish_sheet, &camera)?;
         // player.render_hitbox(&mut canvas, &camera)?;
 
+        // Flash de collecte
+        if flash_timer > 0.0 {
+            let alpha = ((flash_timer / FLASH_DURATION) * 180.0) as u8;
+            canvas.set_draw_color(Color::RGBA(255, 255, 255, alpha));
+            canvas.set_blend_mode(sdl2::render::BlendMode::Blend);
+            canvas.fill_rect(Rect::new(0, 0, WINDOW_WIDTH, WINDOW_HEIGHT))?;
+            canvas.set_blend_mode(sdl2::render::BlendMode::None);
+        }
+
         // 4. HUD — toujours en dernier, par-dessus tout
-        hud.render(&mut canvas, player.hp, player.rubies, player.keys)?;
+        hud.render(&mut canvas, player.hp, player.max_hp, player.rubies, player.keys)?;
 
         canvas.present();
 
@@ -319,6 +355,7 @@ fn main() -> Result<(), String> {
     Ok(())
 }
 
+/*
 /// Crée un spritesheet de test : 4 colonnes (frames) × 4 lignes (directions)
 /// Chaque direction a une couleur dominante + une flèche dessinée en pixels.
 fn create_test_spritesheet(
@@ -504,6 +541,7 @@ fn create_enemy_spritesheet(
 
     Ok(tex)
 }
+*/
 
 fn separate_enemies(enemies: &mut [Enemy], tilemap: &Tilemap, table: &TileTable) {
     for i in 0..enemies.len() {
@@ -567,10 +605,142 @@ fn get_png_path_from_tsx(tsx_path: &str) -> Result<String, String> {
     Ok(tsx_dir.join(source).to_string_lossy().into_owned())
 }
 
+
 fn load_map(name: &str) -> Result<(MapFile, TileTable, String), String> {
     let path = format!("assets/maps/{name}.tmx");
     let map_file   = load_tmx(&path)?;
     let tile_table = TileTable::from_tsx(&map_file.tileset_path)?;
     let png_path   = get_png_path_from_tsx(&map_file.tileset_path)?;
     Ok((map_file, tile_table, png_path.to_string()))
+}
+
+fn save_collected(
+    objects: &[map_loader::MapObject],
+    map_name: &str,
+    collected: &mut HashMap<String, Vec<(i32, i32)>>,
+) {
+
+    let coords: Vec<(i32, i32)> = objects.iter()
+        .filter(|o| o.collected && matches!(
+            o.kind,
+            ObjectKind::HeartPiece | ObjectKind::Chest { .. }
+        ))
+        .map(|o| (o.x as i32, o.y as i32))
+        .collect();
+
+    collected.insert(map_name.to_string(), coords);
+}
+
+fn apply_collected(
+    objects: &mut Vec<map_loader::MapObject>,
+    map_name: &str,
+    collected: &HashMap<String, Vec<(i32, i32)>>,
+) {
+
+    if let Some(coords) = collected.get(map_name) {
+        for obj in objects.iter_mut() {
+            if matches!(obj.kind, ObjectKind::HeartPiece | ObjectKind::Chest { .. }) {
+                if coords.contains(&(obj.x as i32, obj.y as i32)) {
+                    obj.collected = true;
+                }
+            }
+        }
+    }
+}
+
+fn game_over_screen(
+    canvas: &mut sdl2::render::Canvas<sdl2::video::Window>,
+    texture_creator: &sdl2::render::TextureCreator<sdl2::video::WindowContext>,
+    ttf_context: &sdl2::ttf::Sdl2TtfContext,
+    event_pump: &mut sdl2::EventPump,
+) -> Result<(), String> {
+
+    let font_large = ttf_context
+        .load_font("assets/fonts/zelda.ttf", 32)
+        .map_err(|e| e.to_string())?;
+
+    let font_small = ttf_context
+        .load_font("assets/fonts/zelda.ttf", 12)
+        .map_err(|e| e.to_string())?;
+
+    // Pré-rendu des textes
+    let title_surf = font_large.render("GAME OVER")
+        .blended(Color::RGB(200, 40, 40))
+        .map_err(|e| e.to_string())?;
+
+    let sub_surf = font_small.render("Appuyez sur une touche...")
+        .blended(Color::RGB(180, 180, 180))
+        .map_err(|e| e.to_string())?;
+
+    let mut title_tex = texture_creator.create_texture_from_surface(title_surf)
+        .map_err(|e| e.to_string())?;
+
+    let mut sub_tex = texture_creator.create_texture_from_surface(sub_surf)
+        .map_err(|e| e.to_string())?;
+
+    let mut img_tex = texture_creator
+        .load_texture("assets/sprites/game_over.png")
+        .map_err(|e| e.to_string())?;
+
+    let tw = title_tex.query().width;
+    let th = title_tex.query().height;
+
+    let sw = sub_tex.query().width;
+    let sh = sub_tex.query().height;
+
+    let iw = img_tex.query().width;
+    let ih = img_tex.query().height;
+
+    // Centrage de l'image (au-dessus du titre)
+    let img_x = (WINDOW_WIDTH  as i32 - iw as i32) / 2;
+    let img_y = (WINDOW_HEIGHT as i32 / 2) - ih as i32 - th as i32 - 30;
+
+    // Fondu depuis noir
+    let mut alpha: f32 = 0.0;
+
+    canvas.set_blend_mode(sdl2::render::BlendMode::Blend);
+    title_tex.set_blend_mode(sdl2::render::BlendMode::Blend);
+    sub_tex.set_blend_mode(sdl2::render::BlendMode::Blend);
+    img_tex.set_blend_mode(sdl2::render::BlendMode::Blend);
+
+    'go_loop: loop {
+        for event in event_pump.poll_iter() {
+            match event {
+                Event::Quit { .. } => break 'go_loop,
+                Event::KeyDown { .. } | Event::MouseButtonDown { .. } => {
+                    if alpha >= 250.0 { break 'go_loop; }
+                }
+                _ => {}
+            }
+        }
+
+        alpha = (alpha + 3.0).min(255.0);
+        let a = alpha as u8;
+
+        canvas.set_draw_color(Color::RGB(0, 0, 0));
+        canvas.clear();
+
+        // Image en fondu
+        img_tex.set_alpha_mod(a);
+        canvas.copy(&img_tex, None, Some(Rect::new(img_x, img_y, iw, ih)))?;
+
+        // Titre centré
+        title_tex.set_alpha_mod(a);
+        let tx = (WINDOW_WIDTH  as i32 - tw as i32) / 2;
+        let ty = (WINDOW_HEIGHT as i32 / 2) - th as i32 - 10;
+        canvas.copy(&title_tex, None, Some(Rect::new(tx, ty, tw, th)))?;
+
+        // Sous-titre centré
+        if alpha >= 255.0 {
+            sub_tex.set_alpha_mod(255);
+            let sx = (WINDOW_WIDTH  as i32 - sw as i32) / 2;
+            let sy = ty + th as i32 + 20;
+            canvas.copy(&sub_tex, None, Some(Rect::new(sx, sy, sw, sh)))?;
+        }
+
+        canvas.present();
+        std::thread::sleep(Duration::from_millis(16));
+    }
+
+    Ok(())
 }

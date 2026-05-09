@@ -180,6 +180,7 @@ pub fn load_tmx(path: &str) -> Result<MapFile, String> {
 
                     ObjectKind::Transition { target_map, target_entry }
                 }
+                "heart_piece" => ObjectKind::HeartPiece,
                 other => {
                     println!("⚠ objet inconnu : '{other}' ignoré");
                     continue;
@@ -274,6 +275,7 @@ pub enum ObjectKind {
     Key,
     Chest { contains: LootKind },
     Transition {target_map: String, target_entry: String},
+    HeartPiece,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]

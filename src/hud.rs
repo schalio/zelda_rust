@@ -42,7 +42,7 @@ pub struct Hud<'a> {
     label_texture: Texture<'a>,
     label_w: u32,
     label_h: u32,
-    total_hearts: i32,
+    // total_hearts: i32,
     digits: Vec<(Texture<'a>, u32, u32)>,
 }
 
@@ -59,7 +59,7 @@ impl<'a> Hud<'a> {
         font: &Font,
         hearts_path: &str,
         objects_path: &str,
-        max_hp: i32,
+        // _max_hp: i32,
     ) -> Result<Self, String> {
         use sdl2::image::LoadTexture;
 
@@ -99,7 +99,7 @@ impl<'a> Hud<'a> {
             digits.push((tex, w, h));
         }
 
-        let total_hearts = (max_hp + 1) / 2;
+        // let total_hearts = (max_hp + 1) / 2;
 
         Ok(Hud {
             hearts_texture,
@@ -107,7 +107,7 @@ impl<'a> Hud<'a> {
             label_texture,
             label_w,
             label_h,
-            total_hearts,
+            // total_hearts,
             digits,
         })
     }
@@ -147,9 +147,10 @@ impl<'a> Hud<'a> {
 
 
     /// Dessine le HUD complet : panneau + label + cœurs.
-    pub fn render(&self, canvas: &mut Canvas<Window>, hp: i32, rubies: i32, keys: i32) -> Result<(), String> {
+    pub fn render(&self, canvas: &mut Canvas<Window>, hp: i32, max_hp: i32, rubies: i32, keys: i32) -> Result<(), String> {
         // --- Calcul des dimensions du panneau ---
-        let hearts_total_w = self.total_hearts * (HEART_DRAW_W as i32 + HEART_GAP) - HEART_GAP;
+        let total_hearts = (max_hp + 1) / 2;
+        let hearts_total_w = total_hearts * (HEART_DRAW_W as i32 + HEART_GAP) - HEART_GAP;
         let content_w = self.label_w.max(hearts_total_w as u32);
         // let panel_w   = content_w + (PANEL_PAD_X * 2) as u32;
         // let panel_h   = self.label_h + HEART_DRAW_H + (PANEL_PAD_Y * 3) as u32;
@@ -185,7 +186,7 @@ impl<'a> Hud<'a> {
         let hearts_x = PANEL_X + PANEL_PAD_X + (content_w as i32 - hearts_total_w) / 2;
         let hearts_y = label_y + self.label_h as i32 + PANEL_PAD_Y;
 
-        for i in 0..self.total_hearts {
+        for i in 0..total_hearts {
             let cx = hearts_x + i * (HEART_DRAW_W as i32 + HEART_GAP);
             let pv_left = hp - i * 2;
 
@@ -215,6 +216,7 @@ impl<'a> Hud<'a> {
     }
 }
 
+/*
 // Dessine un nombre 0-99 en pixels 2×2
 fn draw_digit(canvas: &mut Canvas<Window>, n: i32, x: i32, y: i32) -> Result<(), String> {
     // Segments 5×7 pour chaque chiffre (bitmask simplifié)
@@ -252,3 +254,5 @@ fn draw_single_digit(canvas: &mut Canvas<Window>, seg: &[u8; 5], x: i32, y: i32)
     }
     Ok(())
 }
+
+ */
