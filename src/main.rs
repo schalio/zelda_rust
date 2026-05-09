@@ -156,6 +156,7 @@ fn main() -> Result<(), String> {
         &texture_creator,
         &font,
         "assets/sprites/hearts.png",
+        "assets/sprites/objects.png",
         player.max_hp,
     )?;
 
@@ -273,7 +274,7 @@ fn main() -> Result<(), String> {
         // player.render_hitbox(&mut canvas, &camera)?;
 
         // 4. HUD — toujours en dernier, par-dessus tout
-        hud.render(&mut canvas, player.hp)?;
+        hud.render(&mut canvas, player.hp, player.rubies, player.keys)?;
 
         canvas.present();
 
