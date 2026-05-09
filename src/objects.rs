@@ -20,6 +20,7 @@ fn sprite_col(kind: &ObjectKind) -> Option<u32> {
         ObjectKind::Ruby               => Some(1),
         ObjectKind::Key                => Some(2),
         ObjectKind::Chest { .. }       => Some(3),
+        ObjectKind::Transition { .. } => None,
     }
 }
 

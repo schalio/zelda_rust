@@ -117,7 +117,9 @@ pub fn load_tmx(path: &str) -> Result<MapFile, String> {
             spawn_points.push(SpawnPoint {
                 x: x * TILE_SCALE as f32,
                 y: y * TILE_SCALE as f32,
-                kind });
+                kind,
+                name: obj.attribute("name").unwrap_or("").to_string(),
+            });
         }
     }
 
@@ -157,6 +159,26 @@ pub fn load_tmx(path: &str) -> Result<MapFile, String> {
                         _       => LootKind::Ruby,
                     };
                     ObjectKind::Chest { contains: loot }
+                }
+                "transition" => {
+                    // Lecture des propriétés custom
+                    let mut target_map   = String::new();
+                    let mut target_entry = String::new();
+
+                    for prop in obj.descendants().filter(|n| n.has_tag_name("property")) {
+                        match prop.attribute("name").unwrap_or("") {
+                            "target_map"   => target_map   = prop.attribute("value").unwrap_or("").to_string(),
+                            "target_entry" => target_entry = prop.attribute("value").unwrap_or("").to_string(),
+                            _ => {}
+                        }
+                    }
+
+                    if target_map.is_empty() {
+                        println!("⚠ transition sans 'target_map' ignorée");
+                        continue;
+                    }
+
+                    ObjectKind::Transition { target_map, target_entry }
                 }
                 other => {
                     println!("⚠ objet inconnu : '{other}' ignoré");
@@ -242,14 +264,16 @@ pub struct SpawnPoint {
     pub x: f32,
     pub y: f32,
     pub kind: SpawnKind,
+    pub name: String,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum ObjectKind {
     Heart,
     Ruby,
     Key,
     Chest { contains: LootKind },
+    Transition {target_map: String, target_entry: String},
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -266,3 +290,4 @@ pub struct MapObject {
     pub kind: ObjectKind,
     pub collected: bool,
 }
+

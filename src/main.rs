@@ -14,12 +14,12 @@ pub mod objects;
 
 use camera::Camera;
 use player::{Player, DeathState};
-use tilemap::{Tilemap, TILE_DRAW_SIZE};
+use tilemap::{Tilemap, TILE_DRAW_SIZE, TILE_SCALE};
 use enemy::Enemy;
 use enemy_type::EnemyKind;
 use tile_properties::TileTable;
-use map_loader::{load_tmx, SpawnKind, SpawnPoint};
-use combat::{resolve_enemy_contact, resolve_player_attack, resolve_object_contact};
+use map_loader::{load_tmx, MapFile, SpawnKind, SpawnPoint};
+use combat::{resolve_enemy_contact, resolve_player_attack, resolve_object_contact, check_transition};
 use hud::{Hud, FONT_SIZE};
 use audio::AudioManager;
 use objects::{render_objects, resolve_chest_collision};
@@ -96,18 +96,17 @@ fn main() -> Result<(), String> {
     let tilemap = Tilemap::new(map_data);
 */
     // --- Chargement Tiled ---
-    let map_file   = load_tmx("assets/maps/zelda_test.tmx")?;
-    println!("{}", map_file.tileset_path);
-    let tile_table = TileTable::from_tsx(&map_file.tileset_path)?;
-    let tileset    = texture_creator.load_texture(
-        // Le PNG est référencé dans le TSX, on le charge depuis son dossier
-        get_png_path_from_tsx(&map_file.tileset_path)?
-    )?;
+    //let map_file   = load_tmx("assets/maps/zelda_test.tmx")?;
+    let (mut map_file, mut tile_table, mut tileset_png) = load_map("zelda_test")?;
+    let mut tileset  = texture_creator.load_texture(&tileset_png)?;
+    // println!("{}", map_file.tileset_path);
+    // let tile_table = TileTable::from_tsx(&map_file.tileset_path)?;
+    // let mut tileset    = texture_creator.load_texture(get_png_path_from_tsx(&map_file.tileset_path)?)?;
 
     // Les couches : 0 = sol (collisions), 1+ = décor au-dessus
     // On utilise la première couche pour les collisions
-    let ground_layer = &map_file.layers[0].tilemap;
-    let mut objects = map_file.objects;
+    // let ground_layer = &map_file.layers[0].tilemap;
+    let mut objects = map_file.objects.clone();
 /*
     // --- Joueur ---
     let mut player = Player::new(
@@ -175,6 +174,37 @@ fn main() -> Result<(), String> {
             }
         }
 
+        if let Some((target_map, target_entry)) = check_transition(&player, &objects) {
+            let target_map   = target_map.clone();
+            let target_entry = target_entry.clone();
+
+            let (new_map, new_table, new_png) = load_map(&target_map)?;
+
+            // ← ici, remplacez le find précédent par :
+            let entry = new_map.spawn_points.iter()
+                .find(|sp| sp.name == target_entry)
+                .or_else(|| new_map.spawn_points.iter()
+                    .find(|sp| matches!(sp.kind, SpawnKind::Player)))
+                .expect(&format!("❌ Spawn '{target_entry}' introuvable"));
+
+            player.x = entry.x;
+            player.y = entry.y;
+
+            tileset    = texture_creator.load_texture(&new_png)?;
+            objects    = new_map.objects.clone();
+            enemies    = new_map.spawn_points.iter()
+                .filter_map(|sp| {
+                    if let SpawnKind::Enemy(kind) = sp.kind {
+                        Some(Enemy::new(sp.x, sp.y, kind))
+                    } else { None }
+                })
+                .collect();
+            tile_table = new_table;
+            map_file   = new_map;
+        }
+
+        let ground_layer = &map_file.layers[0].tilemap;
+
         // --- Mise à jour ---
         let kb = event_pump.keyboard_state();
         let player_events = player.update(dt, &kb, &ground_layer, &tile_table);
@@ -206,6 +236,7 @@ fn main() -> Result<(), String> {
             resolve_player_attack(&player, &mut enemies, &audio);
             resolve_object_contact(&mut player, &mut objects, &audio);
             resolve_chest_collision(&mut player, &objects);
+
 
 
             // Nettoyer les ennemis morts dont l'animation est terminée
@@ -534,4 +565,12 @@ fn get_png_path_from_tsx(tsx_path: &str) -> Result<String, String> {
         .unwrap_or(std::path::Path::new("."));
 
     Ok(tsx_dir.join(source).to_string_lossy().into_owned())
+}
+
+fn load_map(name: &str) -> Result<(MapFile, TileTable, String), String> {
+    let path = format!("assets/maps/{name}.tmx");
+    let map_file   = load_tmx(&path)?;
+    let tile_table = TileTable::from_tsx(&map_file.tileset_path)?;
+    let png_path   = get_png_path_from_tsx(&map_file.tileset_path)?;
+    Ok((map_file, tile_table, png_path.to_string()))
 }

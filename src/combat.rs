@@ -7,6 +7,7 @@ use crate::enemy::Enemy;
 use crate::map_loader::{MapObject, ObjectKind, LootKind};
 
 const PICKUP_RANGE: f32 = crate::tilemap::TILE_DRAW_SIZE as f32 * 0.6;
+const TRANSITION_RANGE: f32 = crate::tilemap::TILE_DRAW_SIZE as f32 * 0.6;
 
 /// Teste si deux rectangles AABB se chevauchent.
 /// Chaque rectangle est défini par son centre (cx, cy) et ses demi-dimensions.
@@ -121,9 +122,28 @@ pub fn resolve_object_contact(player: &mut Player, objects: &mut Vec<MapObject>,
                     collected: false,
                 });
             }
+            ObjectKind::Transition { .. } => {}
         }
     }
 
     objects.extend(to_spawn);
     objects.retain(|o| !o.collected || matches!(o.kind, ObjectKind::Chest { .. }));
+}
+
+pub fn check_transition(
+    player: &Player,
+    objects: &[MapObject],
+) -> Option<(String, String)> {
+    if !player.is_alive() { return None; }
+
+    for obj in objects {
+        if let ObjectKind::Transition { target_map, target_entry } = &obj.kind {
+            let dx = player.x - obj.x;
+            let dy = player.y - obj.y;
+            if (dx * dx + dy * dy).sqrt() < TRANSITION_RANGE {
+                return Some((target_map.clone(), target_entry.clone()));
+            }
+        }
+    }
+    None
 }
