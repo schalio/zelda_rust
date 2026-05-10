@@ -92,6 +92,34 @@ pub fn resolve_player_attack(player: &Player, enemies: &mut [Enemy], audio: &Aud
     }
 }
 
+pub fn resolve_bush_cut(player: &Player, objects: &mut Vec<MapObject>) {
+    if !player.is_alive() { return; }
+
+    let Some((atk_x, atk_y, atk_hw, atk_hh)) = player.attack_hitbox() else {
+        return;
+    };
+
+    for obj in objects.iter_mut() {
+        if obj.collected { continue; }
+
+        if !matches!(obj.kind, ObjectKind::Bush) {
+            continue;
+        }
+
+        let hits = aabb_overlap(
+            atk_x, atk_y, atk_hw, atk_hh,
+            obj.x, obj.y,
+            crate::tilemap::TILE_DRAW_SIZE as f32 * 0.5,
+            crate::tilemap::TILE_DRAW_SIZE as f32 * 0.5,
+        );
+
+        if hits {
+            obj.collected = true;
+        }
+    }
+}
+
+
 pub fn resolve_object_contact(player: &mut Player, objects: &mut Vec<MapObject>, audio: &AudioManager) -> bool {
     
     let mut collected = false;
@@ -133,6 +161,7 @@ pub fn resolve_object_contact(player: &mut Player, objects: &mut Vec<MapObject>,
                 audio.play_pickup_heart(); // son dédié ou réutilisez heart
                 collected = true;
             }
+            ObjectKind::Bush => { }
         }
     }
 

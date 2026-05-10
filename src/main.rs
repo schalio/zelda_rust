@@ -15,7 +15,7 @@ pub mod transition;
 
 use audio::AudioManager;
 use camera::Camera;
-use combat::{check_transition, resolve_enemy_contact, resolve_object_contact, resolve_player_attack};
+use combat::{check_transition, resolve_enemy_contact, resolve_object_contact, resolve_player_attack, resolve_bush_cut};
 use enemy::Enemy;
 use hud::{Hud, FONT_SIZE};
 use map_loader::{load_tmx, MapFile, SpawnKind, ObjectKind};
@@ -353,6 +353,7 @@ fn main() -> Result<(), String> {
             separate_enemies(&mut enemies, &ground_layer, &tile_table);
             resolve_enemy_contact(&mut player, &mut enemies, &audio);
             resolve_player_attack(&player, &mut enemies, &audio);
+            resolve_bush_cut(&player, &mut objects);
             if resolve_object_contact(&mut player, &mut objects, &audio) {
                 flash_timer = FLASH_DURATION;
             }

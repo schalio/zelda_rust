@@ -152,6 +152,7 @@ pub fn load_tmx(path: &str) -> Result<MapFile, String> {
                 "heart" => ObjectKind::Heart,
                 "ruby"  => ObjectKind::Ruby,
                 "key"   => ObjectKind::Key,
+                "bush"  => ObjectKind::Bush,
                 "chest" => {
                     let loot = match contains_prop {
                         "heart" => LootKind::Heart,
@@ -276,6 +277,7 @@ pub enum ObjectKind {
     Chest { contains: LootKind },
     Transition {target_map: String, target_entry: String},
     HeartPiece,
+    Bush,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]

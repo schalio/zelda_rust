@@ -22,6 +22,7 @@ fn sprite_col(kind: &ObjectKind) -> Option<u32> {
         ObjectKind::Chest { .. }       => Some(3),
         ObjectKind::HeartPiece { .. }  => Some(5),
         ObjectKind::Transition { .. } => None,
+        ObjectKind::Bush               => Some(6),
     }
 }
 
@@ -53,7 +54,7 @@ pub fn render_objects(
             SPRITE_SIZE,
             SPRITE_SIZE,
         );
-
+/*
         let (sx, sy) = camera.world_to_screen(
             obj.x - DRAW_SIZE as f32 / 2.0,
             obj.y - DRAW_SIZE as f32 / 2.0,
@@ -64,6 +65,17 @@ pub fn render_objects(
             Some(src),
             Some(Rect::new(sx, sy, DRAW_SIZE, DRAW_SIZE)),
         )?;
+ */
+        let draw_size = match obj.kind {
+            ObjectKind::Bush => crate::tilemap::TILE_DRAW_SIZE,
+            _ => DRAW_SIZE, // ta taille actuelle pour les petits objets
+        } as u32;
+
+        let screen_x = (obj.x - camera.x) as i32;
+        let screen_y = (obj.y - camera.y) as i32;
+
+        let dst = Rect::new(screen_x, screen_y, draw_size, draw_size);
+        canvas.copy(sheet, src, dst)?;
     }
     Ok(())
 }
