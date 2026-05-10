@@ -352,7 +352,7 @@ fn main() -> Result<(), String> {
 */
             separate_enemies(&mut enemies, &ground_layer, &tile_table);
             resolve_enemy_contact(&mut player, &mut enemies, &audio);
-            resolve_player_attack(&player, &mut enemies, &audio);
+            resolve_player_attack(&player, &mut enemies, &mut objects, &audio);
             resolve_bush_cut(&player, &mut objects);
             if resolve_object_contact(&mut player, &mut objects, &audio) {
                 flash_timer = FLASH_DURATION;

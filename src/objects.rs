@@ -5,7 +5,7 @@ use sdl2::render::{Canvas, Texture};
 use sdl2::video::Window;
 
 use crate::camera::Camera;
-use crate::map_loader::{MapObject, ObjectKind};
+use crate::map_loader::{MapObject, ObjectKind, RubyKind};
 use crate::tilemap::TILE_DRAW_SIZE;
 use crate::player::HITBOX_HALF;
 
@@ -16,13 +16,15 @@ const DRAW_SIZE: u32   = TILE_DRAW_SIZE / 2; // taille affichée (48px)
 /// Retourne la colonne dans le spritesheet selon le type d'objet
 fn sprite_col(kind: &ObjectKind) -> Option<u32> {
     match kind {
-        ObjectKind::Heart              => Some(0),
-        ObjectKind::Ruby               => Some(1),
-        ObjectKind::Key                => Some(2),
-        ObjectKind::Chest { .. }       => Some(3),
-        ObjectKind::HeartPiece { .. }  => Some(5),
-        ObjectKind::Transition { .. } => None,
-        ObjectKind::Bush               => Some(6),
+        ObjectKind::Heart                   => Some(0),
+        ObjectKind::Ruby(RubyKind::Green)   => Some(1),
+        ObjectKind::Key                     => Some(2),
+        ObjectKind::Chest { .. }            => Some(3),
+        ObjectKind::HeartPiece { .. }       => Some(5),
+        ObjectKind::Transition { .. }       => None,
+        ObjectKind::Bush                    => Some(6),
+        ObjectKind::Ruby(RubyKind::Blue)    => Some(7),
+        ObjectKind::Ruby(RubyKind::Red)     => Some(8),
     }
 }
 

@@ -150,7 +150,7 @@ pub fn load_tmx(path: &str) -> Result<MapFile, String> {
 
             let kind = match class {
                 "heart" => ObjectKind::Heart,
-                "ruby"  => ObjectKind::Ruby,
+                "ruby"  => ObjectKind::Ruby(RubyKind::Green),
                 "key"   => ObjectKind::Key,
                 "bush"  => ObjectKind::Bush,
                 "chest" => {
@@ -272,7 +272,7 @@ pub struct SpawnPoint {
 #[derive(Debug, Clone, PartialEq)]
 pub enum ObjectKind {
     Heart,
-    Ruby,
+    Ruby(RubyKind),
     Key,
     Chest { contains: LootKind },
     Transition {target_map: String, target_entry: String},
@@ -295,3 +295,9 @@ pub struct MapObject {
     pub collected: bool,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RubyKind {
+    Green,
+    Blue,
+    Red,
+}
