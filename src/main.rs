@@ -11,6 +11,7 @@ pub mod combat;
 pub mod hud;
 pub mod audio;
 pub mod objects;
+pub mod transition;
 
 use audio::AudioManager;
 use camera::Camera;
@@ -22,6 +23,7 @@ use objects::{render_objects, resolve_chest_collision};
 use player::{DeathState, Player};
 use tile_properties::TileTable;
 use tilemap::Tilemap;
+use transition::{IrisTransition, create_iris_texture};
 
 use sdl2::event::Event;
 use sdl2::image::LoadTexture;
@@ -36,6 +38,7 @@ const WINDOW_WIDTH: u32 = 800;
 const WINDOW_HEIGHT: u32 = 600;
 const TARGET_FPS: u64 = 60;
 const FRAME_DURATION_MICROS: u64 = 1_000_000 / TARGET_FPS;
+
 
 fn main() -> Result<(), String> {
     let sdl_context = sdl2::init()?;
@@ -167,6 +170,8 @@ fn main() -> Result<(), String> {
     let mut flash_timer: f32 = 0.0;
     const FLASH_DURATION: f32 = 0.3;
 
+    // let mut fade = FadeTransition::new();
+    let mut iris = IrisTransition::new();
 
 
     'game_loop: loop {
@@ -191,7 +196,91 @@ fn main() -> Result<(), String> {
                 _ => {}
             }
         }
+/*
+        if !fade.is_active() {
+            if let Some((target_map, target_entry)) = check_transition(&player, &objects) {
+                fade.start(target_map, target_entry);
+            }
+        }
+*/
+        // --- DÉCLENCHEMENT de la transition ---
+        let _map_to_load = iris.update(dt);
 
+        if !iris.is_active() {
+            if let Some((target_map, target_entry)) = check_transition(&player, &objects) {
+                iris.start(target_map, target_entry);
+            }
+        }
+
+/*
+        if let Some((target_map, target_entry)) = fade.update(dt) {
+            // === RECHARGEMENT DE LA MAP (déplacé ici depuis l'ancien if let) ===
+            save_collected(&objects, &current_map_name, &mut collected_objects);
+
+            let (new_map, new_table, new_png) = load_map(&target_map)?;
+
+            let entry = new_map.spawn_points.iter()
+                .find(|sp| sp.name == target_entry)
+                .or_else(|| new_map.spawn_points.iter()
+                    .find(|sp| matches!(sp.kind, SpawnKind::Player)))
+                .expect(&format!("❌ Spawn '{target_entry}' introuvable"));
+
+            player.x = entry.x;
+            player.y = entry.y;
+
+            tileset  = texture_creator.load_texture(&new_png)?;
+            objects  = new_map.objects.clone();
+
+            apply_collected(&mut objects, &target_map, &collected_objects);
+
+            current_map_name = target_map;
+
+            enemies = new_map.spawn_points.iter()
+                .filter_map(|sp| {
+                    if let SpawnKind::Enemy(kind) = sp.kind {
+                        Some(Enemy::new(sp.x, sp.y, kind))
+                    } else { None }
+                })
+                .collect();
+
+            tile_table = new_table;
+            map_file   = new_map;
+        }
+*/
+
+        // --- RECHARGEMENT au moment où l'écran est noir ---
+        if let Some((target_map, target_entry)) = iris.update(dt) {
+            save_collected(&objects, &current_map_name, &mut collected_objects);
+
+            let (new_map, new_table, new_png) = load_map(&target_map)?;
+
+            let entry = new_map.spawn_points.iter()
+                .find(|sp| sp.name == target_entry)
+                .or_else(|| new_map.spawn_points.iter()
+                    .find(|sp| matches!(sp.kind, SpawnKind::Player)))
+                .expect(&format!("❌ Spawn '{target_entry}' introuvable"));
+
+            player.x = entry.x;
+            player.y = entry.y;
+
+            tileset  = texture_creator.load_texture(&new_png)?;
+            objects  = new_map.objects.clone();
+            apply_collected(&mut objects, &target_map, &collected_objects);
+            current_map_name = target_map;
+
+            enemies = new_map.spawn_points.iter()
+                .filter_map(|sp| {
+                    if let SpawnKind::Enemy(kind) = sp.kind {
+                        Some(Enemy::new(sp.x, sp.y, kind))
+                    } else { None }
+                })
+                .collect();
+            tile_table = new_table;
+            map_file   = new_map;
+        }
+
+
+        /*
         if let Some((target_map, target_entry)) = check_transition(&player, &objects) {
 
             // println!("→ transition vers {target_map}, current={current_map_name}");
@@ -230,16 +319,18 @@ fn main() -> Result<(), String> {
             tile_table = new_table;
             map_file   = new_map;
         }
-
+*/
         let ground_layer = &map_file.layers[0].tilemap;
 
         // --- Mise à jour ---
         let kb = event_pump.keyboard_state();
-        let player_events = player.update(dt, &kb, &ground_layer, &tile_table);
-        player.clamp_to_map(ground_layer.pixel_width(), ground_layer.pixel_height());
 
-
-        if player_events.sword_swing {audio.play_sword();}
+//        if !fade.is_active() {
+        if !iris.is_active() {
+            let player_events = player.update(dt, &kb, &ground_layer, &tile_table);
+            player.clamp_to_map(ground_layer.pixel_width(), ground_layer.pixel_height());
+            if player_events.sword_swing { audio.play_sword();}
+        }
 
         camera.center_on(
             player.x,
@@ -342,6 +433,27 @@ fn main() -> Result<(), String> {
 
         // 4. HUD — toujours en dernier, par-dessus tout
         hud.render(&mut canvas, player.hp, player.max_hp, player.rubies, player.keys)?;
+
+/*
+        if fade.is_active() && fade.alpha > 0 {
+            canvas.set_blend_mode(sdl2::render::BlendMode::Blend);
+            canvas.set_draw_color(sdl2::pixels::Color::RGBA(0, 0, 0, fade.alpha));
+            canvas.fill_rect(sdl2::rect::Rect::new(
+                0, 0, WINDOW_WIDTH, WINDOW_HEIGHT
+            ))?;
+            canvas.set_blend_mode(sdl2::render::BlendMode::None);
+        }
+*/
+
+        if iris.is_active() {
+            let mask = create_iris_texture(
+                &texture_creator,
+                WINDOW_WIDTH,
+                WINDOW_HEIGHT,
+                iris.cur_radius,
+            )?;
+            canvas.copy(&mask, None, None)?;
+        }
 
         canvas.present();
 

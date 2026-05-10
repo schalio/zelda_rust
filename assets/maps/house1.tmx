@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<map version="1.10" tiledversion="1.12.1" orientation="orthogonal" renderorder="right-down" width="15" height="10" tilewidth="16" tileheight="16" infinite="0" nextlayerid="4" nextobjectid="3">
+<map version="1.10" tiledversion="1.12.1" orientation="orthogonal" renderorder="right-down" width="15" height="10" tilewidth="16" tileheight="16" infinite="0" nextlayerid="4" nextobjectid="4">
  <tileset firstgid="1" source="house1.tsx"/>
  <layer id="1" name="Calque de Tuiles 1" width="15" height="10">
   <data encoding="csv">
@@ -21,6 +21,9 @@
     <property name="target_entry" value="from_house"/>
     <property name="target_map" value="zelda_test"/>
    </properties>
+   <point/>
+  </object>
+  <object id="3" type="heart_piece" x="40.5488" y="40.7946">
    <point/>
   </object>
  </objectgroup>
