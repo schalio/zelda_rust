@@ -12,27 +12,29 @@ pub mod hud;
 pub mod audio;
 pub mod objects;
 pub mod transition;
+pub mod npc;
 
 use audio::AudioManager;
 use camera::Camera;
-use combat::{check_transition, resolve_enemy_contact, resolve_object_contact, resolve_player_attack, resolve_bush_cut};
+use combat::{check_transition, resolve_bush_cut, resolve_enemy_contact, resolve_object_contact, resolve_player_attack};
 use enemy::Enemy;
 use hud::{Hud, FONT_SIZE};
-use map_loader::{load_tmx, MapFile, SpawnKind, ObjectKind};
+use map_loader::{load_tmx, MapFile, ObjectKind, SpawnKind};
+use npc::{find_npc_in_front, render_npcs};
 use objects::{render_objects, resolve_chest_collision};
 use player::{DeathState, Player};
 use tile_properties::TileTable;
 use tilemap::Tilemap;
-use transition::{IrisTransition, create_iris_texture};
+use transition::{create_iris_texture, IrisTransition};
 
 use sdl2::event::Event;
 use sdl2::image::LoadTexture;
 use sdl2::keyboard::Keycode;
 use sdl2::mixer;
 use sdl2::pixels::Color;
-use std::time::{Duration, Instant};
-use std::collections::HashMap;
 use sdl2::rect::Rect;
+use std::collections::HashMap;
+use std::time::{Duration, Instant};
 
 const WINDOW_WIDTH: u32 = 800;
 const WINDOW_HEIGHT: u32 = 600;
@@ -77,6 +79,7 @@ fn main() -> Result<(), String> {
     let slash_sheet = texture_creator.load_texture("assets/sprites/sword_slash.png")?;
     let vanish_sheet = texture_creator.load_texture("assets/sprites/vanish.png")?;
     let objects_sheet = texture_creator.load_texture("assets/sprites/objects.png")?;
+    let npc_texture = texture_creator.load_texture("assets/sprites/npcs.png")?;
 /*
     // --- Carte ---
     #[rustfmt::skip]
@@ -111,6 +114,7 @@ fn main() -> Result<(), String> {
     // On utilise la première couche pour les collisions
     // let ground_layer = &map_file.layers[0].tilemap;
     let mut objects = map_file.objects.clone();
+    let npcs = map_file.npcs.clone();
 /*
     // --- Joueur ---
     let mut player = Player::new(
@@ -173,6 +177,8 @@ fn main() -> Result<(), String> {
     // let mut fade = FadeTransition::new();
     let mut iris = IrisTransition::new();
 
+    let mut active_dialogue: Option<String> = None;
+    let mut interact_pressed_last_frame = false;
 
     'game_loop: loop {
         let now = Instant::now();
@@ -254,6 +260,8 @@ fn main() -> Result<(), String> {
 
             let (new_map, new_table, new_png) = load_map(&target_map)?;
 
+            active_dialogue = None;
+
             let entry = new_map.spawn_points.iter()
                 .find(|sp| sp.name == target_entry)
                 .or_else(|| new_map.spawn_points.iter()
@@ -265,6 +273,7 @@ fn main() -> Result<(), String> {
 
             tileset  = texture_creator.load_texture(&new_png)?;
             objects  = new_map.objects.clone();
+            let _npcs = new_map.npcs.clone();
             apply_collected(&mut objects, &target_map, &collected_objects);
             current_map_name = target_map;
 
@@ -275,6 +284,7 @@ fn main() -> Result<(), String> {
                     } else { None }
                 })
                 .collect();
+
             tile_table = new_table;
             map_file   = new_map;
         }
@@ -325,12 +335,30 @@ fn main() -> Result<(), String> {
         // --- Mise à jour ---
         let kb = event_pump.keyboard_state();
 
+        let interact_pressed =
+            kb.is_scancode_pressed(sdl2::keyboard::Scancode::E) || kb.is_scancode_pressed(sdl2::keyboard::Scancode::Return);
+
+        let interact_just_pressed = interact_pressed && !interact_pressed_last_frame;
+        interact_pressed_last_frame = interact_pressed;
+
+
 //        if !fade.is_active() {
-        if !iris.is_active() {
-            let player_events = player.update(dt, &kb, &ground_layer, &tile_table);
+        if !iris.is_active() && active_dialogue.is_none() {
+            let player_events = player.update(dt, &kb, &ground_layer, &tile_table, &npcs);
             player.clamp_to_map(ground_layer.pixel_width(), ground_layer.pixel_height());
-            if player_events.sword_swing { audio.play_sword();}
+            if player_events.sword_swing {
+                audio.play_sword();
+            }
         }
+
+        if interact_just_pressed {
+            if active_dialogue.is_some() {
+                active_dialogue = None;
+            } else if let Some(npc_index) = find_npc_in_front(player.x, player.y, player.direction, &npcs) {
+                active_dialogue = Some(npcs[npc_index].dialogue.clone());
+            }
+        }
+
 
         camera.center_on(
             player.x,
@@ -412,6 +440,7 @@ fn main() -> Result<(), String> {
 
         // 1.1 Objets au sol  ← nouveau
         render_objects(&objects, &mut canvas, &objects_sheet, &camera)?;
+        render_npcs(&mut canvas, &npc_texture, &camera, &npcs)?;
 
         // 2. Ennemis
         for enemy in enemies.iter() {
@@ -435,6 +464,10 @@ fn main() -> Result<(), String> {
         // 4. HUD — toujours en dernier, par-dessus tout
         hud.render(&mut canvas, player.hp, player.max_hp, player.rubies, player.keys)?;
 
+        if let Some(text) = &active_dialogue {
+            render_dialogue_box(&mut canvas, &texture_creator, &font, text)?;
+        }
+
 /*
         if fade.is_active() && fade.alpha > 0 {
             canvas.set_blend_mode(sdl2::render::BlendMode::Blend);
@@ -455,6 +488,7 @@ fn main() -> Result<(), String> {
             )?;
             canvas.copy(&mask, None, None)?;
         }
+
 
         canvas.present();
 
@@ -854,6 +888,46 @@ fn game_over_screen(
         canvas.present();
         std::thread::sleep(Duration::from_millis(16));
     }
+
+    Ok(())
+}
+
+fn render_dialogue_box(
+    canvas: &mut sdl2::render::Canvas<sdl2::video::Window>,
+    texture_creator: &sdl2::render::TextureCreator<sdl2::video::WindowContext>,
+    font: &sdl2::ttf::Font,
+    text: &str,
+) -> Result<(), String> {
+    let box_x = 32;
+    let box_h = 120;
+    let box_y = WINDOW_HEIGHT as i32 - box_h - 24;
+    let box_w = WINDOW_WIDTH - 64;
+
+    canvas.set_blend_mode(sdl2::render::BlendMode::Blend);
+    canvas.set_draw_color(Color::RGBA(0, 0, 0, 220));
+    canvas.fill_rect(Rect::new(box_x, box_y, box_w, box_h as u32))?;
+
+    canvas.set_draw_color(Color::RGB(255, 255, 255));
+    canvas.draw_rect(Rect::new(box_x, box_y, box_w, box_h as u32))?;
+
+    let surface = font
+        .render(text)
+        .blended_wrapped(Color::RGB(255, 255, 255), box_w - 24)
+        .map_err(|e| e.to_string())?;
+
+    let texture = texture_creator
+        .create_texture_from_surface(&surface)
+        .map_err(|e| e.to_string())?;
+
+    let query = texture.query();
+    let text_x = box_x + 12;
+    let text_y = box_y + 12;
+
+    canvas.copy(
+        &texture,
+        None,
+        Some(Rect::new(text_x, text_y, query.width, query.height)),
+    )?;
 
     Ok(())
 }

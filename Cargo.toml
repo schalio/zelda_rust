@@ -6,3 +6,4 @@ edition = "2024"
 [dependencies]
 sdl2 = { version = "0.37.0", features = ["image", "mixer", "ttf"] }
 roxmltree = "0.20.0"
+rand = "0.10.1"

@@ -1,5 +1,6 @@
 // src/map_loader.rs
 
+use crate::npc::{Npc, NpcKind};
 use crate::tilemap::{Tilemap, TileIndex, EMPTY_TILE, TILE_SCALE};
 
 pub struct MapFile {
@@ -8,6 +9,7 @@ pub struct MapFile {
     pub firstgid: u32,
     pub spawn_points: Vec<SpawnPoint>,
     pub objects: Vec<MapObject>,
+    pub npcs: Vec<Npc>,
 }
 
 pub struct TiledLayer {
@@ -124,6 +126,7 @@ pub fn load_tmx(path: &str) -> Result<MapFile, String> {
     }
 
     let mut objects: Vec<MapObject> = Vec::new();
+    let mut npcs: Vec<Npc> = Vec::new();
 
     for og in root.children().filter(|n| n.has_tag_name("objectgroup")) {
         if og.attribute("name").unwrap_or("") != "objects" { continue; }
@@ -139,6 +142,70 @@ pub fn load_tmx(path: &str) -> Result<MapFile, String> {
             let class = obj.attribute("class")
                 .or_else(|| obj.attribute("type"))
                 .unwrap_or("");
+
+            let _npc_kind_prop = obj
+                .descendants()
+                .find(|n| n.has_tag_name("property")
+                    && n.attribute("name") == Some("npc_kind"))
+                .and_then(|n| n.attribute("value"))
+                .unwrap_or("villager");
+
+            let _solid_prop = obj
+                .descendants()
+                .find(|n| n.has_tag_name("property")
+                    && n.attribute("name") == Some("solid"))
+                .and_then(|n| n.attribute("value"))
+                .unwrap_or("true");
+
+            if class == "npc" {
+                let npc_kind_prop = obj
+                    .descendants()
+                    .find(|n| n.has_tag_name("property")
+                        && n.attribute("name") == Some("npc_kind"))
+                    .and_then(|n| n.attribute("value"))
+                    .unwrap_or("villager");
+
+                let solid_prop = obj
+                    .descendants()
+                    .find(|n| n.has_tag_name("property")
+                        && n.attribute("name") == Some("solid"))
+                    .and_then(|n| n.attribute("value"))
+                    .unwrap_or("true");
+
+                let dialogue_prop = if npc_kind_prop == "animal" {
+                    obj.descendants()
+                        .find(|n| n.has_tag_name("property")
+                            && n.attribute("name") == Some("dialogue_animal"))
+                        .and_then(|n| n.attribute("value"))
+                        .unwrap_or("Meuh.")
+                } else {
+                    obj.descendants()
+                        .find(|n| n.has_tag_name("property")
+                            && n.attribute("name") == Some("dialogue"))
+                        .and_then(|n| n.attribute("value"))
+                        .unwrap_or("Bonjour !")
+                };
+
+                let npc_kind = match npc_kind_prop {
+                    "animal" => NpcKind::Animal,
+                    _ => NpcKind::Villager,
+                };
+
+                let solid = match solid_prop {
+                    "false" => false,
+                    _ => true,
+                };
+
+                npcs.push(Npc {
+                    x,
+                    y,
+                    kind: npc_kind,
+                    solid,
+                    dialogue: dialogue_prop.to_string(),
+                });
+
+                continue;
+            }
 
             // Lecture de la propriété "contains" pour les coffres
             let contains_prop = obj
@@ -193,7 +260,9 @@ pub fn load_tmx(path: &str) -> Result<MapFile, String> {
     }
 
 
-    Ok(MapFile { layers, tileset_path, firstgid, spawn_points, objects })
+
+
+    Ok(MapFile { layers, tileset_path, firstgid, spawn_points, objects, npcs })
 }
 
 fn parse_csv_layer(

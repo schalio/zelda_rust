@@ -10,6 +10,7 @@ use sdl2::video::Window;
 use crate::camera::Camera;
 use crate::tilemap::{Tilemap, TILE_DRAW_SIZE};
 use crate::tile_properties::TileTable;
+use crate::npc::collides_with_npc_rect;
 
 /// Vitesse de déplacement en pixels-monde par seconde
 pub const PLAYER_SPEED: f32 = 180.0;
@@ -171,7 +172,7 @@ impl Player {
 
     /// Mise à jour : lecture du clavier, déplacement, animation.
     /// Appelée une fois par frame avec le delta time.
-    pub fn update(&mut self, dt: f32, kb: &KeyboardState, tilemap: &Tilemap, table: &TileTable) -> PlayerAudioEvents {
+    pub fn update(&mut self, dt: f32, kb: &KeyboardState, tilemap: &Tilemap, table: &TileTable, npcs: &[crate::npc::Npc]) -> PlayerAudioEvents {
 
         let mut events = PlayerAudioEvents::default();
 
@@ -250,12 +251,16 @@ impl Player {
                     }
 
                     let next_x = self.x + dx * PLAYER_SPEED * dt;
-                    if !self.collides_horizontal(next_x, self.y, tilemap, table) {
+                    if !self.collides_horizontal(next_x, self.y, tilemap, table)
+                        && !collides_with_npc_rect(next_x, self.y, HITBOX_HALF_W, HITBOX_HALF_H, npcs)
+                    {
                         self.x = next_x;
                     }
 
                     let next_y = self.y + dy * PLAYER_SPEED * dt;
-                    if !self.collides_vertical(self.x, next_y, tilemap, table) {
+                    if !self.collides_vertical(self.x, next_y, tilemap, table)
+                        && !collides_with_npc_rect(self.x, next_y, HITBOX_HALF_W, HITBOX_HALF_H, npcs)
+                    {
                         self.y = next_y;
                     }
                 } else {
