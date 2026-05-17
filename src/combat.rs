@@ -27,8 +27,6 @@ pub fn aabb_overlap(
 pub fn resolve_enemy_contact(player: &mut Player, enemies: &mut [Enemy], audio: &AudioManager) {
     if !player.is_alive() { return; }
 
-    // ← supprimez la ligne : let was_alive = player.is_alive();
-
     for enemy in enemies.iter() {
         if !enemy.is_alive { continue; }
 
@@ -48,8 +46,6 @@ pub fn resolve_enemy_contact(player: &mut Player, enemies: &mut [Enemy], audio: 
             player.take_hit(enemy.x, enemy.y, enemy.contact_damage());
 
             let state_after = player.death_state;
-
-            // println!("→ state_before={:?} state_after={:?} was_invincible={}", state_before, state_after, was_invincible);
 
             if state_before == DeathState::Alive && state_after == DeathState::Spinning {
             //    println!("→ APPEL play_player_death");
@@ -248,15 +244,6 @@ pub fn check_transition(
 fn should_drop_ruby(chance: f32) -> bool {
     let mut rng = rand::rng();
     rng.random::<f32>() < chance
-}
-
-fn spawn_green_ruby(objects: &mut Vec<MapObject>, x: f32, y: f32) {
-    objects.push(MapObject {
-        x,
-        y,
-        kind: ObjectKind::Ruby(RubyKind::Green),
-        collected: false,
-    });
 }
 
 fn random_ruby_kind() -> RubyKind {

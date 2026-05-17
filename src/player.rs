@@ -57,8 +57,7 @@ const SPIN_SEQUENCE: [Direction; 8] = [  // séquence des directions
     Direction::Down,
     Direction::Right,
 ];
-// Durée totale = 8 × 0.12 = 0.96s
-// const SPIN_TOTAL: f32 = SPIN_FRAME_DURATION * SPIN_SEQUENCE.len() as f32;
+
 const VANISH_DURATION: f32  = 0.4;   // durée de l'animation vanish
 const VANISH_FRAMES: u32    = 2;     // frames dans le spritesheet vanish
 const VANISH_SPRITE_W: u32  = 16;
@@ -428,18 +427,7 @@ impl Player {
                 if self.is_invincible && (self.invincibility_timer * 20.0) as i32 % 2 == 0 {
                     return Ok(());
                 }
-/*
-                let src = Rect::new(
-                    (self.anim_frame * SPRITE_W) as i32,
-                    (self.direction as u32 * SPRITE_H) as i32,
-                    SPRITE_W,
-                    SPRITE_H,
-                );
 
-                let half = (TILE_DRAW_SIZE / 2) as f32;
-                let (sx, sy) = camera.world_to_screen(self.x - half, self.y - half);
-                canvas.copy(spritesheet, Some(src), Some(Rect::new(sx, sy, TILE_DRAW_SIZE, TILE_DRAW_SIZE)))?;
-*/
                 self.render_player_sprite(canvas, spritesheet, camera, 0.0)?;
 
                 // Dessin de l'épée pendant l'attaque
@@ -478,14 +466,7 @@ impl Player {
 
             DeathState::Done => {}
         }
-
-        /*
-        if let Some((ax, ay, hw, hh)) = self.attack_hitbox() {
-            let (asx, asy) = camera.world_to_screen(ax - hw, ay - hh);
-            canvas.set_draw_color(Color::RGB(220, 220, 80));
-            canvas.fill_rect(Rect::new(asx, asy, (hw * 2.0) as u32, (hh * 2.0) as u32))?;
-        }
-*/
+        
         Ok(())
     }
 
@@ -602,7 +583,4 @@ impl Player {
 
         Ok(())
     }
-
-
-
 }

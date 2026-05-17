@@ -1,6 +1,7 @@
 use sdl2::rect::Rect;
 use sdl2::render::{Canvas, Texture};
 use sdl2::video::Window;
+use sdl2::pixels::Color;
 
 use crate::camera::Camera;
 use crate::tilemap::TILE_DRAW_SIZE;
@@ -14,7 +15,6 @@ const SPRITE_H: u32 = 26;
 const DRAW_W: u32 = (TILE_DRAW_SIZE as f64 * 0.5) as u32;
 const DRAW_H: u32 = (DRAW_W as f64 * 26.0 / 16.0) as u32;  // ratio 26/16
 
-const ANIM_FRAME_DURATION: f32 = 0.5;
 pub const NPC_PATROL_SPEED: f32 = 48.0; // pixels par seconde (≈ 1.5 tiles/s)
 const NPC_HALF: f32 = 7.0; // demi-côté hitbox NPC pour les collisions tilemap
 
@@ -184,9 +184,6 @@ pub fn render_npcs(
     npcs: &[Npc],
 ) -> Result<(), String> {
     for npc in npcs {
-        let type_col  = sprite_row(npc.kind);
-        let frame_col = npc.anim_frame as i32;
-
 
         // APRÈS (direction + bobbing)
         let bob_y = (npc.anim_timer * std::f32::consts::PI * 2.0 / 0.5).sin() * 2.0;
@@ -238,8 +235,6 @@ pub fn collides_with_npc_rect(
         let sum_w = half_w + npc_half_w;
         let sum_h = half_h + npc_half_h;
 
-        // println!("dx={:.0} sum_w={:.0} dy={:.0} sum_h={:.0}", dx, sum_w, dy, sum_h);
-
         if dx < sum_w && dy < sum_h {
             return true;
         }
@@ -286,8 +281,6 @@ pub fn render_npc_hitboxes(
     canvas: &mut sdl2::render::Canvas<sdl2::video::Window>,
     camera: &crate::camera::Camera,
 ) -> Result<(), String> {
-    use sdl2::pixels::Color;
-    use sdl2::rect::Rect;
 
     let npc_draw_w = crate::tilemap::TILE_DRAW_SIZE as f32 * 0.5;
     let npc_draw_h = npc_draw_w * 26.0 / 16.0;

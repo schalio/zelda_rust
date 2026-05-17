@@ -56,18 +56,7 @@ pub fn render_objects(
             SPRITE_SIZE,
             SPRITE_SIZE,
         );
-/*
-        let (sx, sy) = camera.world_to_screen(
-            obj.x - DRAW_SIZE as f32 / 2.0,
-            obj.y - DRAW_SIZE as f32 / 2.0,
-        );
 
-        canvas.copy(
-            sheet,
-            Some(src),
-            Some(Rect::new(sx, sy, DRAW_SIZE, DRAW_SIZE)),
-        )?;
- */
         let draw_size = match obj.kind {
             ObjectKind::Bush => crate::tilemap::TILE_DRAW_SIZE,
             _ => DRAW_SIZE, // ta taille actuelle pour les petits objets

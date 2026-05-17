@@ -143,9 +143,6 @@ impl Enemy {
         }
     }
 
-
-
-
     /// Mise à jour de l'IA et du mouvement.
     pub fn update(
         &mut self,

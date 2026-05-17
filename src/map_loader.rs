@@ -280,9 +280,6 @@ pub fn load_tmx(path: &str) -> Result<MapFile, String> {
         }
     }
 
-
-
-
     Ok(MapFile { layers, tileset_path, firstgid, spawn_points, objects, npcs })
 }
 
