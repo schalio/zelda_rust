@@ -108,7 +108,11 @@
   </object>
   <object id="20" type="sign" gid="11" x="640" y="256" width="16" height="16">
    <properties>
-    <property name="text" value="Bienvenue dans le village !"/>
+    <property name="text">Bienvenue dans le village !
+
+
+Le forgeron est à l'est. Bonne route !
+ </property>
    </properties>
   </object>
  </objectgroup>

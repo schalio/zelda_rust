@@ -126,7 +126,11 @@ fn main() -> Result<(), String> {
 
     let mut iris = IrisTransition::new();
 
-    let mut active_dialogue: Option<String> = None;
+    // let mut active_dialogue: Option<String> = None;
+
+    let mut dialogue_pages: Vec<String> = Vec::new();
+    let mut dialogue_page: usize = 0;
+
     let mut interact_pressed_last_frame = false;
 
     'game_loop: loop {
@@ -167,7 +171,8 @@ fn main() -> Result<(), String> {
 
             let (new_map, new_table, new_png) = load_map(&target_map)?;
 
-            active_dialogue = None;
+            dialogue_pages.clear();
+            dialogue_page = 0;
 
             let entry = new_map.spawn_points.iter()
                 .find(|sp| sp.name == target_entry)
@@ -209,7 +214,7 @@ fn main() -> Result<(), String> {
 
         update_npcs(&mut npcs, dt, player.x, player.y, ground_layer, &tile_table);
 
-        if !iris.is_active() && active_dialogue.is_none() {
+        if !iris.is_active() && dialogue_pages.is_empty() {
             let player_events = player.update(dt, &kb, &ground_layer, &tile_table, &npcs);
             player.clamp_to_map(ground_layer.pixel_width(), ground_layer.pixel_height());
             if player_events.sword_swing {
@@ -218,18 +223,25 @@ fn main() -> Result<(), String> {
         }
 
         if interact_just_pressed {
-            if active_dialogue.is_some() {
-                active_dialogue = None;
+            if !dialogue_pages.is_empty() {
+                // Avancer à la page suivante ou fermer
+                dialogue_page += 1;
+                if dialogue_page >= dialogue_pages.len() {
+                    dialogue_pages.clear();
+                    dialogue_page = 0;
+                }
             } else if let Some(npc_index) = find_npc_in_front(player.x, player.y, player.direction, &npcs) {
                 if npcs[npc_index].patrol_target.is_none() {
-                    active_dialogue = Some(npcs[npc_index].dialogue.clone());
+                    dialogue_pages = split_dialogue(&npcs[npc_index].dialogue);
+                    dialogue_page = 0;
                 }
             } else {
                 // Panneau
                 for obj in &objects {
                     if let ObjectKind::Sign { text } = &obj.kind {
                         if is_in_front_of_player(player.x, player.y, player.direction, obj.x, obj.y) {
-                            active_dialogue = Some(text.clone());
+                            dialogue_pages = split_dialogue(text);
+                            dialogue_page = 0;
                             break;
                         }
                     }
@@ -320,8 +332,13 @@ fn main() -> Result<(), String> {
         // 4. HUD — toujours en dernier, par-dessus tout
         hud.render(&mut canvas, player.hp, player.max_hp, player.rubies, player.keys)?;
 
-        if let Some(text) = &active_dialogue {
-            render_dialogue_box(&mut canvas, &texture_creator, &font, text)?;
+        if !dialogue_pages.is_empty() {
+            let is_last = dialogue_page >= dialogue_pages.len() - 1;
+            render_dialogue_box(
+                &mut canvas, &texture_creator, &font,
+                &dialogue_pages[dialogue_page],
+                is_last,
+            )?;
         }
 
         if iris.is_active() {
@@ -574,6 +591,7 @@ fn render_dialogue_box(
     texture_creator: &sdl2::render::TextureCreator<sdl2::video::WindowContext>,
     font: &sdl2::ttf::Font,
     text: &str,
+    is_last: bool,
 ) -> Result<(), String> {
     let box_x = 32;
     let box_h = 120;
@@ -606,5 +624,37 @@ fn render_dialogue_box(
         Some(Rect::new(text_x, text_y, query.width, query.height)),
     )?;
 
+    // Indicateur en bas à droite
+    let indicator = if is_last { "[ E ] Fermer" } else { "[ E ] Suite ▶" };
+    let ind_surf = font
+        .render(indicator)
+        .blended(Color::RGB(180, 180, 180))
+        .map_err(|e| e.to_string())?;
+    let ind_tex = texture_creator
+        .create_texture_from_surface(&ind_surf)
+        .map_err(|e| e.to_string())?;
+    let iw = ind_tex.query().width;
+    let ih = ind_tex.query().height;
+    canvas.copy(
+        &ind_tex,
+        None,
+        Some(Rect::new(
+            box_x + box_w as i32 - iw as i32 - 12,
+            box_y + box_h - ih as i32 - 8,
+            iw, ih,
+        )),
+    )?;
+
     Ok(())
+}
+
+fn split_dialogue(text: &str) -> Vec<String> {
+    // Normalise : remplace les \n littéraux par de vrais sauts de ligne
+    let normalized = text.replace("\\n", "\n");
+
+    // Sépare sur double saut de ligne
+    normalized.split("\n\n")
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .collect()
 }

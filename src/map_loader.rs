@@ -275,9 +275,14 @@ pub fn load_tmx(path: &str) -> Result<MapFile, String> {
                         .descendants()
                         .find(|n| n.has_tag_name("property")
                             && n.attribute("name") == Some("text"))
-                        .and_then(|n| n.attribute("value"))
-                        .unwrap_or("...")
-                        .to_string();
+                        .and_then(|n| {
+                            // D'abord l'attribut value (texte simple)
+                            n.attribute("value")
+                                .map(|s| s.to_string())
+                                // Sinon le contenu texte du nœud (texte multiligne)
+                                .or_else(|| n.text().map(|s| s.trim().to_string()))
+                        })
+                        .unwrap_or_else(|| "...".to_string());
                     ObjectKind::Sign { text }
                 }
                 other => {
