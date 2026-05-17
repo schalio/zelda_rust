@@ -214,6 +214,7 @@ pub fn resolve_object_contact(player: &mut Player, objects: &mut Vec<MapObject>,
                 collected = true;
             }
             ObjectKind::Bush => { }
+            ObjectKind::Sign { .. } => { }
         }
     }
 

@@ -221,9 +221,18 @@ fn main() -> Result<(), String> {
             if active_dialogue.is_some() {
                 active_dialogue = None;
             } else if let Some(npc_index) = find_npc_in_front(player.x, player.y, player.direction, &npcs) {
-                // Seuls les PNJ statiques (sans patrouille) sont interactables
                 if npcs[npc_index].patrol_target.is_none() {
                     active_dialogue = Some(npcs[npc_index].dialogue.clone());
+                }
+            } else {
+                // Panneau
+                for obj in &objects {
+                    if let ObjectKind::Sign { text } = &obj.kind {
+                        if is_in_front_of_player(player.x, player.y, player.direction, obj.x, obj.y) {
+                            active_dialogue = Some(text.clone());
+                            break;
+                        }
+                    }
                 }
             }
         }
@@ -336,6 +345,27 @@ fn main() -> Result<(), String> {
     }
 
     Ok(())
+}
+
+fn is_in_front_of_player(
+    px: f32, py: f32,
+    dir: player::Direction,
+    obj_x: f32, obj_y: f32,
+) -> bool {
+    use crate::tilemap::TILE_DRAW_SIZE;
+    let reach = TILE_DRAW_SIZE as f32 * 1.2;
+
+    // Centrer le panneau (coin haut-gauche → centre)
+    let ox = obj_x + TILE_DRAW_SIZE as f32 * 0.5;
+    let oy = obj_y + TILE_DRAW_SIZE as f32 * 0.5;
+
+    let (dx, dy) = (ox - px, oy - py);
+    match dir {
+        player::Direction::Up    => dy < 0.0 && dy.abs() < reach && dx.abs() < reach,
+        player::Direction::Down  => dy > 0.0 && dy.abs() < reach && dx.abs() < reach,
+        player::Direction::Left  => dx < 0.0 && dx.abs() < reach && dy.abs() < reach,
+        player::Direction::Right => dx > 0.0 && dx.abs() < reach && dy.abs() < reach,
+    }
 }
 
 fn separate_enemies(enemies: &mut [Enemy], tilemap: &Tilemap, table: &TileTable) {

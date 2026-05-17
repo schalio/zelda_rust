@@ -270,6 +270,16 @@ pub fn load_tmx(path: &str) -> Result<MapFile, String> {
                     ObjectKind::Transition { target_map, target_entry }
                 }
                 "heart_piece" => ObjectKind::HeartPiece,
+                "sign" => {
+                    let text = obj
+                        .descendants()
+                        .find(|n| n.has_tag_name("property")
+                            && n.attribute("name") == Some("text"))
+                        .and_then(|n| n.attribute("value"))
+                        .unwrap_or("...")
+                        .to_string();
+                    ObjectKind::Sign { text }
+                }
                 other => {
                     println!("⚠ objet inconnu : '{other}' ignoré");
                     continue;
@@ -378,6 +388,7 @@ pub enum ObjectKind {
     Transition {target_map: String, target_entry: String},
     HeartPiece,
     Bush,
+    Sign {text: String},
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]

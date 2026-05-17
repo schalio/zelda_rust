@@ -25,6 +25,7 @@ fn sprite_col(kind: &ObjectKind) -> Option<u32> {
         ObjectKind::Bush                    => Some(6),
         ObjectKind::Ruby(RubyKind::Blue)    => Some(7),
         ObjectKind::Ruby(RubyKind::Red)     => Some(8),
+        ObjectKind::Sign { .. }             => Some(9),
     }
 }
 
