@@ -16,7 +16,7 @@ pub mod npc;
 
 use audio::AudioManager;
 use camera::Camera;
-use combat::{check_transition, resolve_bush_cut, resolve_enemy_contact, resolve_object_contact, resolve_player_attack};
+use combat::{resolve_bush_cut, resolve_enemy_contact, resolve_object_contact, resolve_player_attack};
 use enemy::Enemy;
 use hud::{Hud, FONT_SIZE};
 use map_loader::{load_tmx, MapFile, ObjectKind, SpawnKind, KeyKind};
@@ -130,6 +130,7 @@ fn main() -> Result<(), String> {
 
     let mut dialogue_pages: Vec<String> = Vec::new();
     let mut dialogue_page: usize = 0;
+    let mut dialogue_close_cooldown: u32 = 0;
 
     let mut interact_pressed_last_frame = false;
 
@@ -157,22 +158,37 @@ fn main() -> Result<(), String> {
         }
 
         // --- DÉCLENCHEMENT de la transition ---
-        let _map_to_load = iris.update(dt);
+        // let _map_to_load = iris.update(dt);
 
         if !iris.is_active() && dialogue_pages.is_empty() {
-            for obj in &objects {
-                if let ObjectKind::Transition { target_map, target_entry, locked } = &obj.kind {
+            if dialogue_close_cooldown > 0 {
+                dialogue_close_cooldown -= 1; // ← décompte ici
+            } else {
+                for i in 0..objects.len() {
+                    let obj = &objects[i];
                     if !combat::player_touches_object(&player, obj) { continue; }
 
-                    match locked {
+                    let (target_map_val, target_entry_val, locked_val) =
+                        if let ObjectKind::Transition { target_map, target_entry, locked } = &obj.kind {
+                            (target_map.clone(), target_entry.clone(), locked.clone())
+                        } else {
+                            continue;
+                        };
+
+                    match locked_val {
                         None => {
-                            iris.start(target_map.clone(), target_entry.clone());
+                            objects[i].collected = true;
+                            iris.start(target_map_val, target_entry_val);
                             break;
                         }
                         Some(key_kind) => {
-                            if player.has_key(*key_kind) {
-                                player.use_key(*key_kind);
-                                iris.start(target_map.clone(), target_entry.clone());
+                            if objects[i].collected || player.has_key(key_kind) {
+                                if !objects[i].collected {
+                                    // Première ouverture : consommer la clé et marquer
+                                    player.use_key(key_kind);
+                                    objects[i].collected = true;
+                                }
+                                iris.start(target_map_val, target_entry_val);
                             } else {
                                 let msg = match key_kind {
                                     KeyKind::Basic  => "Cette porte est verrouillée.\nIl te faut une clé.",
@@ -182,6 +198,16 @@ fn main() -> Result<(), String> {
                                 };
                                 dialogue_pages = split_dialogue(msg);
                                 dialogue_page = 0;
+
+                                // Repousser le joueur
+                                use crate::tilemap::TILE_DRAW_SIZE;
+                                let push = TILE_DRAW_SIZE as f32 * 0.1;
+                                match player.direction {
+                                    player::Direction::Up    => player.y += push,
+                                    player::Direction::Down  => player.y -= push,
+                                    player::Direction::Left  => player.x += push,
+                                    player::Direction::Right => player.x -= push,
+                                }
                             }
                             break;
                         }
@@ -254,6 +280,15 @@ fn main() -> Result<(), String> {
                 if dialogue_page >= dialogue_pages.len() {
                     dialogue_pages.clear();
                     dialogue_page = 0;
+                    dialogue_close_cooldown = 30;
+                    use crate::tilemap::TILE_DRAW_SIZE;
+                    let push = TILE_DRAW_SIZE as f32 * 0.1;
+                    match player.direction {
+                        player::Direction::Up    => player.y += push,
+                        player::Direction::Down  => player.y -= push,
+                        player::Direction::Left  => player.x += push,
+                        player::Direction::Right => player.x -= push,
+                    }
                 }
             } else if let Some(npc_index) = find_npc_in_front(player.x, player.y, player.direction, &npcs) {
                 if npcs[npc_index].patrol_target.is_none() {
@@ -485,11 +520,12 @@ fn save_collected(
     map_name: &str,
     collected: &mut HashMap<String, Vec<(i32, i32)>>,
 ) {
-
     let coords: Vec<(i32, i32)> = objects.iter()
         .filter(|o| o.collected && matches!(
             o.kind,
-            ObjectKind::HeartPiece | ObjectKind::Chest { .. }
+            ObjectKind::HeartPiece
+            | ObjectKind::Chest { .. }
+            | ObjectKind::Transition { .. }
         ))
         .map(|o| (o.x as i32, o.y as i32))
         .collect();
@@ -502,10 +538,14 @@ fn apply_collected(
     map_name: &str,
     collected: &HashMap<String, Vec<(i32, i32)>>,
 ) {
-
     if let Some(coords) = collected.get(map_name) {
         for obj in objects.iter_mut() {
-            if matches!(obj.kind, ObjectKind::HeartPiece | ObjectKind::Chest { .. }) {
+            if matches!(
+                obj.kind,
+                ObjectKind::HeartPiece
+                | ObjectKind::Chest { .. }
+                | ObjectKind::Transition { .. }
+            ) {
                 if coords.contains(&(obj.x as i32, obj.y as i32)) {
                     obj.collected = true;
                 }
