@@ -19,7 +19,7 @@ use camera::Camera;
 use combat::{check_transition, resolve_bush_cut, resolve_enemy_contact, resolve_object_contact, resolve_player_attack};
 use enemy::Enemy;
 use hud::{Hud, FONT_SIZE};
-use map_loader::{load_tmx, MapFile, ObjectKind, SpawnKind};
+use map_loader::{load_tmx, MapFile, ObjectKind, SpawnKind, KeyKind};
 use npc::{find_npc_in_front, render_npcs, update_npcs};
 use objects::{render_objects, resolve_chest_collision};
 use player::{DeathState, Player};
@@ -159,9 +159,34 @@ fn main() -> Result<(), String> {
         // --- DÉCLENCHEMENT de la transition ---
         let _map_to_load = iris.update(dt);
 
-        if !iris.is_active() {
-            if let Some((target_map, target_entry)) = check_transition(&player, &objects) {
-                iris.start(target_map, target_entry);
+        if !iris.is_active() && dialogue_pages.is_empty() {
+            for obj in &objects {
+                if let ObjectKind::Transition { target_map, target_entry, locked } = &obj.kind {
+                    if !combat::player_touches_object(&player, obj) { continue; }
+
+                    match locked {
+                        None => {
+                            iris.start(target_map.clone(), target_entry.clone());
+                            break;
+                        }
+                        Some(key_kind) => {
+                            if player.has_key(*key_kind) {
+                                player.use_key(*key_kind);
+                                iris.start(target_map.clone(), target_entry.clone());
+                            } else {
+                                let msg = match key_kind {
+                                    KeyKind::Basic  => "Cette porte est verrouillée.\nIl te faut une clé.",
+                                    KeyKind::Silver => "Cette porte requiert une clé d'argent.",
+                                    KeyKind::Gold   => "Cette porte requiert une clé d'or.",
+                                    KeyKind::Boss   => "Cette porte mène au boss.\nIl te faut la clé du donjon.",
+                                };
+                                dialogue_pages = split_dialogue(msg);
+                                dialogue_page = 0;
+                            }
+                            break;
+                        }
+                    }
+                }
             }
         }
 
@@ -330,7 +355,7 @@ fn main() -> Result<(), String> {
         }
 
         // 4. HUD — toujours en dernier, par-dessus tout
-        hud.render(&mut canvas, player.hp, player.max_hp, player.rubies, player.keys)?;
+        hud.render(&mut canvas, player.hp, player.max_hp, player.rubies, player.keys_basic as i32)?;
 
         if !dialogue_pages.is_empty() {
             let is_last = dialogue_page >= dialogue_pages.len() - 1;

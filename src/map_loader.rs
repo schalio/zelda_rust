@@ -239,25 +239,36 @@ pub fn load_tmx(path: &str) -> Result<MapFile, String> {
             let kind = match class {
                 "heart" => ObjectKind::Heart,
                 "ruby"  => ObjectKind::Ruby(RubyKind::Green),
-                "key"   => ObjectKind::Key,
+                "key"   => {
+                    let kind = parse_key_kind(&obj);
+                    ObjectKind::Key(kind)
+                }
+                "door" => {
+                    let requires = parse_key_kind(&obj);
+                    ObjectKind::Door { requires }
+                }
                 "bush"  => ObjectKind::Bush,
                 "chest" => {
                     let loot = match contains_prop {
                         "heart" => LootKind::Heart,
-                        "key"   => LootKind::Key,
-                        _       => LootKind::Ruby,
+                        "key"          => LootKind::Key(KeyKind::Basic),
+                        "key_silver"   => LootKind::Key(KeyKind::Silver),
+                        "key_gold"     => LootKind::Key(KeyKind::Gold),
+                        "key_boss"     => LootKind::Key(KeyKind::Boss),
+                        _              => LootKind::Ruby,
                     };
                     ObjectKind::Chest { contains: loot }
                 }
                 "transition" => {
-                    // Lecture des propriétés custom
                     let mut target_map   = String::new();
                     let mut target_entry = String::new();
+                    let mut locked_str   = String::new();
 
                     for prop in obj.descendants().filter(|n| n.has_tag_name("property")) {
                         match prop.attribute("name").unwrap_or("") {
                             "target_map"   => target_map   = prop.attribute("value").unwrap_or("").to_string(),
                             "target_entry" => target_entry = prop.attribute("value").unwrap_or("").to_string(),
+                            "locked"       => locked_str   = prop.attribute("value").unwrap_or("").to_string(),
                             _ => {}
                         }
                     }
@@ -267,7 +278,15 @@ pub fn load_tmx(path: &str) -> Result<MapFile, String> {
                         continue;
                     }
 
-                    ObjectKind::Transition { target_map, target_entry }
+                    let locked = match locked_str.as_str() {
+                        "basic"  => Some(KeyKind::Basic),
+                        "silver" => Some(KeyKind::Silver),
+                        "gold"   => Some(KeyKind::Gold),
+                        "boss"   => Some(KeyKind::Boss),
+                        _        => None,
+                    };
+
+                    ObjectKind::Transition { target_map, target_entry, locked }
                 }
                 "heart_piece" => ObjectKind::HeartPiece,
                 "sign" => {
@@ -370,6 +389,21 @@ fn get_float_property(node: &roxmltree::Node, name: &str) -> Option<f32> {
         .ok()
 }
 
+fn parse_key_kind(obj: &roxmltree::Node) -> KeyKind {
+    obj.descendants()
+        .find(|n| n.has_tag_name("property")
+            && n.attribute("name") == Some("key_kind"))
+        .and_then(|n| n.attribute("value"))
+        .map(|v| match v {
+            "silver" => KeyKind::Silver,
+            "gold"   => KeyKind::Gold,
+            "boss"   => KeyKind::Boss,
+            _        => KeyKind::Basic,
+        })
+        .unwrap_or(KeyKind::Basic)
+}
+
+
 #[derive(Debug, Clone, Copy)]
 pub enum SpawnKind {
     Player,
@@ -388,19 +422,20 @@ pub struct SpawnPoint {
 pub enum ObjectKind {
     Heart,
     Ruby(RubyKind),
-    Key,
+    Key(KeyKind),
     Chest { contains: LootKind },
-    Transition {target_map: String, target_entry: String},
+    Transition { target_map: String, target_entry: String, locked: Option<KeyKind> },
     HeartPiece,
     Bush,
-    Sign {text: String},
+    Sign { text: String },
+    Door { requires: KeyKind },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum LootKind {
     Heart,
     Ruby,
-    Key,
+    Key(KeyKind),
 }
 
 #[derive(Debug, Clone)]
@@ -416,4 +451,12 @@ pub enum RubyKind {
     Green,
     Blue,
     Red,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum KeyKind {
+    Basic,
+    Silver,
+    Gold,
+    Boss,
 }

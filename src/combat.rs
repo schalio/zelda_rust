@@ -3,7 +3,7 @@
 
 use crate::audio::AudioManager;
 use crate::enemy::Enemy;
-use crate::map_loader::{LootKind, MapObject, ObjectKind, RubyKind};
+use crate::map_loader::{LootKind, MapObject, ObjectKind, RubyKind, KeyKind};
 use crate::player::{DeathState, Player};
 
 use rand::RngExt;
@@ -185,9 +185,15 @@ pub fn resolve_object_contact(player: &mut Player, objects: &mut Vec<MapObject>,
                 audio.play_pickup_ruby();
                 collected = true;
             },
-            ObjectKind::Key                    => {
-                player.keys += 1;
+            ObjectKind::Key(kind) => {
+                // player.keys += 1;
                 obj.collected = true;
+                match kind {
+                        KeyKind::Basic  => player.keys_basic  += 1,
+                        KeyKind::Silver => player.keys_silver += 1,
+                        KeyKind::Gold   => player.keys_gold   += 1,
+                        KeyKind::Boss   => player.keys_boss   += 1,
+                    }
                 audio.play_pickup_ruby();
                 collected = true;
             },
@@ -200,7 +206,7 @@ pub fn resolve_object_contact(player: &mut Player, objects: &mut Vec<MapObject>,
                     kind: match contains {
                         LootKind::Heart => ObjectKind::Heart,
                         LootKind::Ruby  => ObjectKind::Ruby(RubyKind::Green),
-                        LootKind::Key   => ObjectKind::Key,
+                        LootKind::Key(k)   => ObjectKind::Key(k),
                     },
                     collected: false,
                 });
@@ -215,6 +221,7 @@ pub fn resolve_object_contact(player: &mut Player, objects: &mut Vec<MapObject>,
             }
             ObjectKind::Bush => { }
             ObjectKind::Sign { .. } => { }
+            ObjectKind::Door { .. } => { }
         }
     }
 
@@ -231,7 +238,7 @@ pub fn check_transition(
     if !player.is_alive() { return None; }
 
     for obj in objects {
-        if let ObjectKind::Transition { target_map, target_entry } = &obj.kind {
+        if let ObjectKind::Transition { target_map, target_entry ,..} = &obj.kind {
             let dx = player.x - obj.x;
             let dy = player.y - obj.y;
             if (dx * dx + dy * dy).sqrt() < TRANSITION_RANGE {
@@ -258,4 +265,10 @@ fn random_ruby_kind() -> RubyKind {
     } else {
         RubyKind::Red
     }
+}
+
+pub fn player_touches_object(player: &Player, obj: &MapObject) -> bool {
+    let dx = player.x - obj.x;
+    let dy = player.y - obj.y;
+    (dx * dx + dy * dy).sqrt() < TRANSITION_RANGE
 }

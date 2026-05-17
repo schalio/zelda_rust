@@ -11,6 +11,7 @@ use crate::camera::Camera;
 use crate::tilemap::{Tilemap, TILE_DRAW_SIZE};
 use crate::tile_properties::TileTable;
 use crate::npc::collides_with_npc_rect;
+use crate::map_loader::KeyKind;
 
 /// Vitesse de déplacement en pixels-monde par seconde
 pub const PLAYER_SPEED: f32 = 180.0;
@@ -129,7 +130,10 @@ pub struct Player {
     pub attack_anim_frame: u32,
     
     pub rubies: i32,
-    pub keys: i32,
+    pub keys_basic:  u32,
+    pub keys_silver: u32,
+    pub keys_gold:   u32,
+    pub keys_boss:   u32,
 }
 
 impl Player {
@@ -157,7 +161,10 @@ impl Player {
             vanish_timer: 0.0,
             vanish_frame: 0,
             rubies: 0,
-            keys: 0,
+            keys_basic:  0,
+            keys_silver: 0,
+            keys_gold:   0,
+            keys_boss:   0,
         }
     }
 
@@ -466,7 +473,7 @@ impl Player {
 
             DeathState::Done => {}
         }
-        
+
         Ok(())
     }
 
@@ -583,4 +590,24 @@ impl Player {
 
         Ok(())
     }
+
+    pub fn has_key(&self, kind: KeyKind) -> bool {
+        match kind {
+            KeyKind::Basic  => self.keys_basic  > 0,
+            KeyKind::Silver => self.keys_silver > 0,
+            KeyKind::Gold   => self.keys_gold   > 0,
+            KeyKind::Boss   => self.keys_boss   > 0,
+        }
+    }
+
+    pub fn use_key(&mut self, kind: KeyKind) {
+        match kind {
+            KeyKind::Basic  => self.keys_basic  = self.keys_basic.saturating_sub(1),
+            KeyKind::Silver => self.keys_silver = self.keys_silver.saturating_sub(1),
+            KeyKind::Gold   => self.keys_gold   = self.keys_gold.saturating_sub(1),
+            KeyKind::Boss   => self.keys_boss   = self.keys_boss.saturating_sub(1),
+        }
+    }
+
 }
+

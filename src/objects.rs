@@ -5,7 +5,7 @@ use sdl2::render::{Canvas, Texture};
 use sdl2::video::Window;
 
 use crate::camera::Camera;
-use crate::map_loader::{MapObject, ObjectKind, RubyKind};
+use crate::map_loader::{KeyKind, MapObject, ObjectKind, RubyKind};
 use crate::tilemap::TILE_DRAW_SIZE;
 use crate::player::HITBOX_HALF;
 
@@ -18,7 +18,7 @@ fn sprite_col(kind: &ObjectKind) -> Option<u32> {
     match kind {
         ObjectKind::Heart                   => Some(0),
         ObjectKind::Ruby(RubyKind::Green)   => Some(1),
-        ObjectKind::Key                     => Some(2),
+        ObjectKind::Key(KeyKind::Basic)     => Some(2),
         ObjectKind::Chest { .. }            => Some(3),
         ObjectKind::HeartPiece { .. }       => Some(5),
         ObjectKind::Transition { .. }       => None,
@@ -26,6 +26,10 @@ fn sprite_col(kind: &ObjectKind) -> Option<u32> {
         ObjectKind::Ruby(RubyKind::Blue)    => Some(7),
         ObjectKind::Ruby(RubyKind::Red)     => Some(8),
         ObjectKind::Sign { .. }             => Some(9),
+        ObjectKind::Key(KeyKind::Silver)    => Some(10), // adapter la colonne selon ton spritesheet
+        ObjectKind::Key(KeyKind::Gold)      => Some(11),
+        ObjectKind::Key(KeyKind::Boss)      => Some(12),
+        ObjectKind::Door { .. }                   => None,
     }
 }
 
