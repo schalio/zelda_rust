@@ -37,8 +37,10 @@ pub struct Npc {
     pub anim_timer: f32,
     pub anim_frame: u32,
     // --- Patrouille ---
-    pub patrol_target: Option<(f32, f32)>,  // destination courante (absolue)
-    pub patrol_origin: Option<(f32, f32)>,  // position de départ (absolue)
+    // pub patrol_target: Option<(f32, f32)>,  // destination courante (absolue)
+    // pub patrol_origin: Option<(f32, f32)>,  // position de départ (absolue)
+    pub waypoints:     Option<Vec<(f32, f32)>>,
+    pub waypoint_idx:  usize,
     pub patrol_going: bool,                 // true = vers target, false = retour
     pub direction: u32,                     // 0=bas 1=haut 2=gauche 3=droite
 }
@@ -64,41 +66,46 @@ pub fn update_npcs(
     tile_table: &crate::tile_properties::TileTable,
 ) {
     for npc in npcs.iter_mut() {
-        // --- Animation bobbing (inchangée) ---
         npc.anim_timer += dt;
 
-        // --- Patrouille ---
-        // Si le PNJ n'a pas de points de patrouille, il reste statique
-        let (Some(origin), Some(target)) = (npc.patrol_origin, npc.patrol_target) else {
-            continue;
-        };
+        let Some(ref waypoints) = npc.waypoints else { continue; };
 
-        // Destination courante selon le sens de marche
-        let dest = if npc.patrol_going { target } else { origin };
+        if waypoints.len() < 2 { continue; }
 
-        let dx = dest.0 - npc.x;
-        let dy = dest.1 - npc.y;
+        let (tx, ty) = waypoints[npc.waypoint_idx];
+        let dx = tx - npc.x;
+        let dy = ty - npc.y;
         let dist = (dx * dx + dy * dy).sqrt();
 
         if dist < 2.0 {
-            // Arrivé à destination → demi-tour
-            npc.x = dest.0;
-            npc.y = dest.1;
-            npc.patrol_going = !npc.patrol_going;
+            // Arrivé au waypoint → waypoint suivant (ping-pong)
+            npc.x = tx;
+            npc.y = ty;
+
+            if npc.patrol_going {
+                if npc.waypoint_idx + 1 >= waypoints.len() {
+                    npc.patrol_going = false;
+                    npc.waypoint_idx -= 1;
+                } else {
+                    npc.waypoint_idx += 1;
+                }
+            } else {
+                if npc.waypoint_idx == 0 {
+                    npc.patrol_going = true;
+                    npc.waypoint_idx += 1;
+                } else {
+                    npc.waypoint_idx -= 1;
+                }
+            }
         } else {
-            // Avancer vers la destination
             let nx = dx / dist;
             let ny = dy / dist;
-            let move_x = nx * NPC_PATROL_SPEED * dt;
-            let move_y = ny * NPC_PATROL_SPEED * dt;
 
-            // Collision tilemap : on teste les 4 coins de la hitbox du NPC
-            // NPC_HALF = demi-côté de la hitbox (défini en constante)
-            let new_x = npc.x + move_x;
+            let new_x = npc.x + nx * NPC_PATROL_SPEED * dt;
             if !npc_collides_with_tilemap(new_x, npc.y, tilemap, tile_table) {
                 npc.x = new_x;
             }
-            let new_y = npc.y + move_y;
+            let new_y = npc.y + ny * NPC_PATROL_SPEED * dt;
             if !npc_collides_with_tilemap(npc.x, new_y, tilemap, tile_table) {
                 npc.y = new_y;
             }
@@ -278,11 +285,11 @@ pub fn find_npc_in_front(
 
 pub fn render_npc_hitboxes(
     npcs: &[Npc],
-    canvas: &mut sdl2::render::Canvas<sdl2::video::Window>,
-    camera: &crate::camera::Camera,
+    canvas: &mut Canvas<Window>,
+    camera: &Camera,
 ) -> Result<(), String> {
 
-    let npc_draw_w = crate::tilemap::TILE_DRAW_SIZE as f32 * 0.5;
+    let npc_draw_w = TILE_DRAW_SIZE as f32 * 0.5;
     let npc_draw_h = npc_draw_w * 26.0 / 16.0;
 
     for npc in npcs.iter().filter(|n| n.solid) {

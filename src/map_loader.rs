@@ -198,18 +198,37 @@ pub fn load_tmx(path: &str) -> Result<MapFile, String> {
                     _ => true,
                 };
 
-                // --- Patrouille (optionnelle) ---
-                let patrol_dx = get_float_property(&obj, "patrol_dx");
-                let patrol_dy = get_float_property(&obj, "patrol_dy");
 
-                let (patrol_origin, patrol_target) = match (patrol_dx, patrol_dy) {
-                    (Some(dx), Some(dy)) => (
-                        Some((x, y)),
-                        Some((x + dx * TILE_SCALE as f32, y + dy * TILE_SCALE as f32)),
-                    ),
-                    _ => (None, None),
-                };
+                let waypoints: Option<Vec<(f32, f32)>> = obj
+                    .children()
+                    .find(|n| n.has_tag_name("polyline") || n.has_tag_name("polygon"))
+                    .map(|poly| {
+                        let raw_x = obj.attribute("x").unwrap_or("0").parse::<f32>().unwrap_or(0.0);
+                        let raw_y = obj.attribute("y").unwrap_or("0").parse::<f32>().unwrap_or(0.0);
+                        let points: Vec<(f32, f32)> = poly.attribute("points")
+                            .unwrap_or("")
+                            .split_whitespace()
+                            .filter_map(|pair| {
+                                let mut it = pair.split(',');
+                                let px = it.next()?.parse::<f32>().ok()?;
+                                let py = it.next()?.parse::<f32>().ok()?;
+                                Some((
+                                    (raw_x + px) * TILE_SCALE as f32,
+                                    (raw_y + py) * TILE_SCALE as f32,
+                                ))
+                            })
+                            .collect();
+                        points
+                    });
 
+                let waypoints = waypoints.or_else(|| {
+                    let dx = get_float_property(&obj, "patrol_dx")?;
+                    let dy = get_float_property(&obj, "patrol_dy")?;
+                    Some(vec![
+                        (x, y),
+                        (x + dx * TILE_SCALE as f32, y + dy * TILE_SCALE as f32),
+                    ])
+                });
 
                 npcs.push(Npc {
                     x,
@@ -219,8 +238,8 @@ pub fn load_tmx(path: &str) -> Result<MapFile, String> {
                     dialogue: dialogue_prop.to_string(),
                     anim_timer: 0.0,
                     anim_frame: 0,
-                    patrol_origin,
-                    patrol_target,
+                    waypoints,
+                    waypoint_idx: 1,
                     patrol_going : true,
                     direction: 0,
                 });

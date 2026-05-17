@@ -291,7 +291,7 @@ fn main() -> Result<(), String> {
                     }
                 }
             } else if let Some(npc_index) = find_npc_in_front(player.x, player.y, player.direction, &npcs) {
-                if npcs[npc_index].patrol_target.is_none() {
+                if npcs[npc_index].waypoints.is_none() {
                     dialogue_pages = split_dialogue(&npcs[npc_index].dialogue);
                     dialogue_page = 0;
                 }

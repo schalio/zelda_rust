@@ -226,7 +226,11 @@ pub fn resolve_object_contact(player: &mut Player, objects: &mut Vec<MapObject>,
     }
 
     objects.extend(to_spawn);
-    objects.retain(|o| !o.collected || matches!(o.kind, ObjectKind::Chest { .. } | ObjectKind::HeartPiece));
+    objects.retain(|o| !o.collected || matches!(o.kind,
+        ObjectKind::Chest { .. }
+        | ObjectKind::HeartPiece
+        | ObjectKind::Transition { .. }
+    ));
     
     collected
 }
