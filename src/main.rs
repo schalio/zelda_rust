@@ -263,7 +263,7 @@ fn main() -> Result<(), String> {
         let interact_just_pressed = interact_pressed && !interact_pressed_last_frame;
         interact_pressed_last_frame = interact_pressed;
 
-        update_npcs(&mut npcs, dt, player.x, player.y, ground_layer, &tile_table);
+        update_npcs(&mut npcs, dt, player.x, player.y, ground_layer, &tile_table, !dialogue_pages.is_empty());
 
         if !iris.is_active() && dialogue_pages.is_empty() {
             let player_events = player.update(dt, &kb, &ground_layer, &tile_table, &npcs);
@@ -291,10 +291,10 @@ fn main() -> Result<(), String> {
                     }
                 }
             } else if let Some(npc_index) = find_npc_in_front(player.x, player.y, player.direction, &npcs) {
-                if npcs[npc_index].waypoints.is_none() {
+                // if npcs[npc_index].waypoints.is_none() {
                     dialogue_pages = split_dialogue(&npcs[npc_index].dialogue);
                     dialogue_page = 0;
-                }
+                // }
             } else {
                 // Panneau
                 for obj in &objects {

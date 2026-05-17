@@ -64,9 +64,12 @@ pub fn update_npcs(
     player_y: f32,
     tilemap: &crate::tilemap::Tilemap,
     tile_table: &crate::tile_properties::TileTable,
+    dialogue_active: bool,
 ) {
     for npc in npcs.iter_mut() {
         npc.anim_timer += dt;
+
+        if dialogue_active { continue; }
 
         let Some(ref waypoints) = npc.waypoints else { continue; };
 
