@@ -162,7 +162,7 @@ impl AudioManager {
         // println!("→ play_player_death : arrêt musique + démarrage son");
         Music::halt();
         mixer::Channel(CHANNEL_PLAYER_DEATH).play(&self.sfx_player_death, 0).unwrap();
-        // println!("→ canal {} playing={}", CHANNEL_PLAYER_DEATH, mixer::Channel(CHANNEL_PLAYER_DEATH as i32).is_playing());
+        
     }
 
     pub fn play_pickup_ruby(&self) {

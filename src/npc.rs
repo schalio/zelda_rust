@@ -1,6 +1,7 @@
 use sdl2::rect::Rect;
 use sdl2::render::{Canvas, Texture};
 use sdl2::video::Window;
+use sdl2::pixels::Color;
 
 use crate::camera::Camera;
 use crate::tilemap::TILE_DRAW_SIZE;
@@ -237,9 +238,7 @@ pub fn collides_with_npc_rect(
         let dy = (player_cy - npc_cy).abs();
         let sum_w = half_w + npc_half_w;
         let sum_h = half_h + npc_half_h;
-
-        // println!("dx={:.0} sum_w={:.0} dy={:.0} sum_h={:.0}", dx, sum_w, dy, sum_h);
-
+        
         if dx < sum_w && dy < sum_h {
             return true;
         }
@@ -286,8 +285,6 @@ pub fn render_npc_hitboxes(
     canvas: &mut sdl2::render::Canvas<sdl2::video::Window>,
     camera: &crate::camera::Camera,
 ) -> Result<(), String> {
-    use sdl2::pixels::Color;
-    use sdl2::rect::Rect;
 
     let npc_draw_w = crate::tilemap::TILE_DRAW_SIZE as f32 * 0.5;
     let npc_draw_h = npc_draw_w * 26.0 / 16.0;

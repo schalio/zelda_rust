@@ -152,8 +152,6 @@ impl<'a> Hud<'a> {
         let total_hearts = (max_hp + 1) / 2;
         let hearts_total_w = total_hearts * (HEART_DRAW_W as i32 + HEART_GAP) - HEART_GAP;
         let content_w = self.label_w.max(hearts_total_w as u32);
-        // let panel_w   = content_w + (PANEL_PAD_X * 2) as u32;
-        // let panel_h   = self.label_h + HEART_DRAW_H + (PANEL_PAD_Y * 3) as u32;
 
         // Hauteur étendue pour rubis + clés
         let row_h     = OBJ_DRAW_SIZE + 4;
@@ -215,44 +213,3 @@ impl<'a> Hud<'a> {
         Ok(())
     }
 }
-
-/*
-// Dessine un nombre 0-99 en pixels 2×2
-fn draw_digit(canvas: &mut Canvas<Window>, n: i32, x: i32, y: i32) -> Result<(), String> {
-    // Segments 5×7 pour chaque chiffre (bitmask simplifié)
-    let digits: [[u8; 5]; 10] = [
-        [0b11111, 0b10001, 0b10001, 0b10001, 0b11111], // 0
-        [0b00100, 0b00100, 0b00100, 0b00100, 0b00100], // 1
-        [0b11111, 0b00001, 0b11111, 0b10000, 0b11111], // 2
-        [0b11111, 0b00001, 0b11111, 0b00001, 0b11111], // 3
-        [0b10001, 0b10001, 0b11111, 0b00001, 0b00001], // 4
-        [0b11111, 0b10000, 0b11111, 0b00001, 0b11111], // 5
-        [0b11111, 0b10000, 0b11111, 0b10001, 0b11111], // 6
-        [0b11111, 0b00001, 0b00001, 0b00001, 0b00001], // 7
-        [0b11111, 0b10001, 0b11111, 0b10001, 0b11111], // 8
-        [0b11111, 0b10001, 0b11111, 0b00001, 0b11111], // 9
-    ];
-
-    let tens = (n / 10) as usize;
-    let ones = (n % 10) as usize;
-    let offset = if n >= 10 { 0 } else { 4 }; // centrage si 1 chiffre
-
-    if n >= 10 {
-        draw_single_digit(canvas, &digits[tens], x, y)?;
-    }
-    draw_single_digit(canvas, &digits[ones], x + offset, y)?;
-    Ok(())
-}
-
-fn draw_single_digit(canvas: &mut Canvas<Window>, seg: &[u8; 5], x: i32, y: i32) -> Result<(), String> {
-    for (row, &bits) in seg.iter().enumerate() {
-        for col in 0..5 {
-            if bits & (1 << (4 - col)) != 0 {
-                canvas.fill_rect(Rect::new(x + col * 2, y + row as i32 * 2, 2, 2))?;
-            }
-        }
-    }
-    Ok(())
-}
-
- */
