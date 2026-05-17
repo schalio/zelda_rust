@@ -188,6 +188,8 @@ pub fn load_tmx(path: &str) -> Result<MapFile, String> {
 
                 let npc_kind = match npc_kind_prop {
                     "animal" => NpcKind::Animal,
+                    "guy" => NpcKind::Guy,
+                    "girl" => NpcKind::Girl,
                     _ => NpcKind::Villager,
                 };
 
@@ -196,12 +198,31 @@ pub fn load_tmx(path: &str) -> Result<MapFile, String> {
                     _ => true,
                 };
 
+                // --- Patrouille (optionnelle) ---
+                let patrol_dx = get_float_property(&obj, "patrol_dx");
+                let patrol_dy = get_float_property(&obj, "patrol_dy");
+
+                let (patrol_origin, patrol_target) = match (patrol_dx, patrol_dy) {
+                    (Some(dx), Some(dy)) => (
+                        Some((x, y)),
+                        Some((x + dx * TILE_SCALE as f32, y + dy * TILE_SCALE as f32)),
+                    ),
+                    _ => (None, None),
+                };
+
+
                 npcs.push(Npc {
                     x,
                     y,
                     kind: npc_kind,
                     solid,
                     dialogue: dialogue_prop.to_string(),
+                    anim_timer: 0.0,
+                    anim_frame: 0,
+                    patrol_origin,
+                    patrol_target,
+                    patrol_going : true,
+                    direction: 0,
                 });
 
                 continue;
@@ -322,7 +343,20 @@ fn resolve_relative_path(parent_path: &str, relative: &str) -> String {
         .into_owned()
 }
 
-// src/map_loader.rs
+/// Lit une propriété float custom sur un nœud XML d'objet Tiled.
+/// Cherche <properties><property name="nom" value="..."/></properties>
+fn get_float_property(node: &roxmltree::Node, name: &str) -> Option<f32> {
+    node.children()
+        .find(|n| n.has_tag_name("properties"))?
+        .children()
+        .find(|n| {
+            n.has_tag_name("property")
+                && n.attribute("name") == Some(name)
+        })?
+        .attribute("value")?
+        .parse::<f32>()
+        .ok()
+}
 
 #[derive(Debug, Clone, Copy)]
 pub enum SpawnKind {

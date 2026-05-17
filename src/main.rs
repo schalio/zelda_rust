@@ -20,7 +20,7 @@ use combat::{check_transition, resolve_bush_cut, resolve_enemy_contact, resolve_
 use enemy::Enemy;
 use hud::{Hud, FONT_SIZE};
 use map_loader::{load_tmx, MapFile, ObjectKind, SpawnKind};
-use npc::{find_npc_in_front, render_npcs};
+use npc::{find_npc_in_front, render_npcs, update_npcs};
 use objects::{render_objects, resolve_chest_collision};
 use player::{DeathState, Player};
 use tile_properties::TileTable;
@@ -114,7 +114,7 @@ fn main() -> Result<(), String> {
     // On utilise la première couche pour les collisions
     // let ground_layer = &map_file.layers[0].tilemap;
     let mut objects = map_file.objects.clone();
-    let npcs = map_file.npcs.clone();
+    let mut npcs = map_file.npcs.clone();
 /*
     // --- Joueur ---
     let mut player = Player::new(
@@ -273,7 +273,7 @@ fn main() -> Result<(), String> {
 
             tileset  = texture_creator.load_texture(&new_png)?;
             objects  = new_map.objects.clone();
-            let _npcs = new_map.npcs.clone();
+            let npcs = new_map.npcs.clone();
             apply_collected(&mut objects, &target_map, &collected_objects);
             current_map_name = target_map;
 
@@ -341,9 +341,14 @@ fn main() -> Result<(), String> {
         let interact_just_pressed = interact_pressed && !interact_pressed_last_frame;
         interact_pressed_last_frame = interact_pressed;
 
+        update_npcs(&mut npcs, dt, player.x, player.y, ground_layer, &tile_table);
 
 //        if !fade.is_active() {
         if !iris.is_active() && active_dialogue.is_none() {
+
+            // Juste avant : player.update(...)
+            // println!("npc[0] pos=({:.0},{:.0})", npcs[0].x, npcs[0].y);
+
             let player_events = player.update(dt, &kb, &ground_layer, &tile_table, &npcs);
             player.clamp_to_map(ground_layer.pixel_width(), ground_layer.pixel_height());
             if player_events.sword_swing {
@@ -355,7 +360,10 @@ fn main() -> Result<(), String> {
             if active_dialogue.is_some() {
                 active_dialogue = None;
             } else if let Some(npc_index) = find_npc_in_front(player.x, player.y, player.direction, &npcs) {
-                active_dialogue = Some(npcs[npc_index].dialogue.clone());
+                // Seuls les PNJ statiques (sans patrouille) sont interactables
+                if npcs[npc_index].patrol_target.is_none() {
+                    active_dialogue = Some(npcs[npc_index].dialogue.clone());
+                }
             }
         }
 
@@ -441,6 +449,7 @@ fn main() -> Result<(), String> {
         // 1.1 Objets au sol  ← nouveau
         render_objects(&objects, &mut canvas, &objects_sheet, &camera)?;
         render_npcs(&mut canvas, &npc_texture, &camera, &npcs)?;
+        // npc::render_npc_hitboxes(&npcs, &mut canvas, &camera)?;  // ← debug
 
         // 2. Ennemis
         for enemy in enemies.iter() {
@@ -450,7 +459,7 @@ fn main() -> Result<(), String> {
 
         // 3. Joueur
         player.render(&mut canvas, &spritesheet, &slash_sheet, &vanish_sheet, &camera)?;
-        // player.render_hitbox(&mut canvas, &camera)?;
+        // player.render_hitbox(&mut canvas, &camera)?; // ← debug
 
         // Flash de collecte
         if flash_timer > 0.0 {

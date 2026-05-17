@@ -14,10 +14,17 @@ const SPRITE_H: u32 = 26;
 const DRAW_W: u32 = (TILE_DRAW_SIZE as f64 * 0.5) as u32;
 const DRAW_H: u32 = (DRAW_W as f64 * 26.0 / 16.0) as u32;  // ratio 26/16
 
+const ANIM_FRAME_DURATION: f32 = 0.5;
+pub const NPC_PATROL_SPEED: f32 = 48.0; // pixels par seconde (≈ 1.5 tiles/s)
+const NPC_HALF: f32 = 7.0; // demi-côté hitbox NPC pour les collisions tilemap
+
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum NpcKind {
     Villager,
     Animal,
+    Guy,
+    Girl,
 }
 
 #[derive(Debug, Clone)]
@@ -27,14 +34,148 @@ pub struct Npc {
     pub kind: NpcKind,
     pub solid: bool,
     pub dialogue: String,
+    pub anim_timer: f32,
+    pub anim_frame: u32,
+    // --- Patrouille ---
+    pub patrol_target: Option<(f32, f32)>,  // destination courante (absolue)
+    pub patrol_origin: Option<(f32, f32)>,  // position de départ (absolue)
+    pub patrol_going: bool,                 // true = vers target, false = retour
+    pub direction: u32,                     // 0=bas 1=haut 2=gauche 3=droite
 }
 
-fn sprite_col(kind: NpcKind) -> i32 {
+/// Retourne la ligne du spritesheet pour ce type de PNJ.
+/// Ligne 0=Villager, 1=Animal, 2=Guy, 3=Girl
+fn sprite_row(kind: NpcKind) -> i32 {
     match kind {
         NpcKind::Villager => 0,
-        NpcKind::Animal => 1,
+        NpcKind::Animal   => 1,
+        NpcKind::Guy      => 2,
+        NpcKind::Girl     => 3,
     }
 }
+
+
+pub fn update_npcs(
+    npcs: &mut Vec<Npc>,
+    dt: f32,
+    player_x: f32,
+    player_y: f32,
+    tilemap: &crate::tilemap::Tilemap,
+    tile_table: &crate::tile_properties::TileTable,
+) {
+    for npc in npcs.iter_mut() {
+        // --- Animation bobbing (inchangée) ---
+        npc.anim_timer += dt;
+
+        // --- Patrouille ---
+        // Si le PNJ n'a pas de points de patrouille, il reste statique
+        let (Some(origin), Some(target)) = (npc.patrol_origin, npc.patrol_target) else {
+            continue;
+        };
+
+        // Destination courante selon le sens de marche
+        let dest = if npc.patrol_going { target } else { origin };
+
+        let dx = dest.0 - npc.x;
+        let dy = dest.1 - npc.y;
+        let dist = (dx * dx + dy * dy).sqrt();
+
+        if dist < 2.0 {
+            // Arrivé à destination → demi-tour
+            npc.x = dest.0;
+            npc.y = dest.1;
+            npc.patrol_going = !npc.patrol_going;
+        } else {
+            // Avancer vers la destination
+            let nx = dx / dist;
+            let ny = dy / dist;
+            let move_x = nx * NPC_PATROL_SPEED * dt;
+            let move_y = ny * NPC_PATROL_SPEED * dt;
+
+            // Collision tilemap : on teste les 4 coins de la hitbox du NPC
+            // NPC_HALF = demi-côté de la hitbox (défini en constante)
+            let new_x = npc.x + move_x;
+            if !npc_collides_with_tilemap(new_x, npc.y, tilemap, tile_table) {
+                npc.x = new_x;
+            }
+            let new_y = npc.y + move_y;
+            if !npc_collides_with_tilemap(npc.x, new_y, tilemap, tile_table) {
+                npc.y = new_y;
+            }
+
+            npc.direction = direction_from_vector(nx, ny);
+
+            if npc.solid {
+                push_npc_away_from_player(npc, player_x, player_y);
+            }
+        }
+    }
+}
+
+/// Repousse le NPC si sa hitbox chevauche celle du joueur.
+/// On utilise une hitbox carrée simple : demi-côté de 8px pour chacun.
+fn push_npc_away_from_player(npc: &mut Npc, player_x: f32, player_y: f32) {
+    use crate::tilemap::TILE_DRAW_SIZE;
+
+    // Demi-dimensions joueur (identiques à HITBOX_HALF_W/H dans player.rs)
+    let player_half_w = TILE_DRAW_SIZE as f32 * 0.30;
+    let player_half_h = TILE_DRAW_SIZE as f32 * 0.30;
+
+    // Centre NPC (npc.x/y = coin haut-gauche)
+    let npc_draw_w = TILE_DRAW_SIZE as f32 * 0.5;
+    let npc_draw_h = npc_draw_w * 26.0 / 16.0;
+    let npc_cx = npc.x + npc_draw_w * 0.5;
+    let npc_cy = npc.y + npc_draw_h * 0.5;
+    let npc_half_w = npc_draw_w * 0.5;
+    let npc_half_h = npc_draw_h * 0.5;
+
+    let sum_w = player_half_w + npc_half_w;
+    let sum_h = player_half_h + npc_half_h;
+
+    let dx = npc_cx - player_x;
+    let dy = npc_cy - player_y;
+
+    let overlap_x = sum_w - dx.abs();
+    let overlap_y = sum_h - dy.abs();
+
+    if overlap_x > 0.0 && overlap_y > 0.0 {
+        // Repousser sur l'axe avec le moins de chevauchement
+        if overlap_x < overlap_y {
+            let push = if dx >= 0.0 { overlap_x } else { -overlap_x };
+            npc.x += push;  // on déplace le coin, pas le centre
+        } else {
+            let push = if dy >= 0.0 { overlap_y } else { -overlap_y };
+            npc.y += push;
+        }
+    }
+}
+
+/// Teste si la hitbox du NPC (carré centré) touche une tuile solide.
+/// On vérifie les 4 coins — même technique que le joueur.
+fn npc_collides_with_tilemap(
+    cx: f32,
+    cy: f32,
+    tilemap: &crate::tilemap::Tilemap,
+    table: &crate::tile_properties::TileTable,
+) -> bool {
+    let h = NPC_HALF - 1.0; // légère marge pour éviter le blocage sur les bords
+    tilemap.is_solid_at(cx - h, cy - h, table)
+        || tilemap.is_solid_at(cx + h, cy - h, table)
+        || tilemap.is_solid_at(cx - h, cy + h, table)
+        || tilemap.is_solid_at(cx + h, cy + h, table)
+}
+
+
+/// Convertit un vecteur normalisé en index de direction sprite.
+/// Spritesheet : 0=bas  1=haut  2=gauche  3=droite
+fn direction_from_vector(nx: f32, ny: f32) -> u32 {
+    if ny.abs() >= nx.abs() {
+        if ny > 0.0 { 0 } else { 1 } // bas ou haut
+    } else {
+        if nx < 0.0 { 2 } else { 3 } // gauche ou droite
+    }
+}
+
 
 pub fn render_npcs(
     canvas: &mut Canvas<Window>,
@@ -43,11 +184,23 @@ pub fn render_npcs(
     npcs: &[Npc],
 ) -> Result<(), String> {
     for npc in npcs {
-        let src_x = sprite_col(npc.kind) * SPRITE_W as i32;
-        let src = Rect::new(src_x, 0, SPRITE_W, SPRITE_H);
+        let type_col  = sprite_row(npc.kind);
+        let frame_col = npc.anim_frame as i32;
+
+
+        // APRÈS (direction + bobbing)
+        let bob_y = (npc.anim_timer * std::f32::consts::PI * 2.0 / 0.5).sin() * 2.0;
+
+        // Colonne = type de PNJ (Villager=0, Animal=1, …)
+        let src_y = sprite_row(npc.kind) * SPRITE_H as i32;
+        // Ligne = direction (0=bas, 1=haut, 2=gauche, 3=droite)
+        let src_x = npc.direction as i32 * SPRITE_W as i32;
+
+        let src = Rect::new(src_x, src_y, SPRITE_W, SPRITE_H);
+
         let dst = Rect::new(
             (npc.x - camera.x) as i32,
-            (npc.y - camera.y) as i32,
+            (npc.y - camera.y) as i32 + bob_y as i32,
             DRAW_W,
             DRAW_H,
         );
@@ -59,27 +212,38 @@ pub fn render_npcs(
 }
 
 pub fn collides_with_npc_rect(
-    next_x: f32,
-    next_y: f32,
-    player_w: f32,
-    player_h: f32,
+    player_cx: f32,
+    player_cy: f32,
+    half_w: f32,
+    half_h: f32,
     npcs: &[Npc],
 ) -> bool {
+    use crate::tilemap::TILE_DRAW_SIZE;
+
     for npc in npcs.iter().filter(|n| n.solid) {
-        // Hitbox du PNJ : un peu plus petite que le sprite pour le feeling
-        let npc_w = TILE_DRAW_SIZE as f32 * 0.75;
-        let npc_h = (TILE_DRAW_SIZE as f32 * 26.0 / 16.0) * 0.75;
+        let npc_draw_w = TILE_DRAW_SIZE as f32 * 0.5;
+        let npc_draw_h = npc_draw_w * 26.0 / 16.0;
 
-        let overlap = next_x < npc.x + npc_w
-            && next_x + player_w > npc.x
-            && next_y < npc.y + npc_h
-            && next_y + player_h > npc.y;
+        // npc.x/npc.y = coin haut-gauche, déjà en pixels-monde
+        let npc_cx = npc.x + npc_draw_w * 0.5;
+        let npc_cy = npc.y + npc_draw_h * 0.5;
 
-        if overlap {
+        // sum_w/sum_h doivent couvrir dx≈80, dy≈4
+        // on prend la moitié du sprite complet de chaque côté
+        let npc_half_w = npc_draw_w * 0.5;
+        let npc_half_h = npc_draw_h * 0.5;
+
+        let dx = (player_cx - npc_cx).abs();
+        let dy = (player_cy - npc_cy).abs();
+        let sum_w = half_w + npc_half_w;
+        let sum_h = half_h + npc_half_h;
+
+        // println!("dx={:.0} sum_w={:.0} dy={:.0} sum_h={:.0}", dx, sum_w, dy, sum_h);
+
+        if dx < sum_w && dy < sum_h {
             return true;
         }
     }
-
     false
 }
 
@@ -115,4 +279,34 @@ pub fn find_npc_in_front(
     }
 
     None
+}
+
+pub fn render_npc_hitboxes(
+    npcs: &[Npc],
+    canvas: &mut sdl2::render::Canvas<sdl2::video::Window>,
+    camera: &crate::camera::Camera,
+) -> Result<(), String> {
+    use sdl2::pixels::Color;
+    use sdl2::rect::Rect;
+
+    let npc_draw_w = crate::tilemap::TILE_DRAW_SIZE as f32 * 0.5;
+    let npc_draw_h = npc_draw_w * 26.0 / 16.0;
+
+    for npc in npcs.iter().filter(|n| n.solid) {
+        let npc_world_x = npc.x;
+        let npc_world_y = npc.y;
+        let npc_cx = npc_world_x + npc_draw_w * 0.5;
+        let npc_cy = npc_world_y + npc_draw_h * 0.5;
+        let npc_half_w = npc_draw_w * 0.30;
+        let npc_half_h = npc_draw_h * 0.30;
+
+        let (sx, sy) = camera.world_to_screen(npc_cx - npc_half_w, npc_cy - npc_half_h);
+        canvas.set_draw_color(Color::RGB(255, 0, 255)); // magenta
+        canvas.draw_rect(Rect::new(
+            sx, sy,
+            (npc_half_w * 2.0) as u32,
+            (npc_half_h * 2.0) as u32,
+        ))?;
+    }
+    Ok(())
 }

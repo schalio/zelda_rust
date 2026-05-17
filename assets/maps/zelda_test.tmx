@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<map version="1.10" tiledversion="1.12.1" orientation="orthogonal" renderorder="right-down" width="50" height="36" tilewidth="16" tileheight="16" infinite="0" nextlayerid="4" nextobjectid="19">
+<map version="1.10" tiledversion="1.12.1" orientation="orthogonal" renderorder="right-down" width="50" height="36" tilewidth="16" tileheight="16" infinite="0" nextlayerid="4" nextobjectid="20">
  <tileset firstgid="1" source="zelda brouillon.tsx"/>
  <layer id="1" name="Calque de Tuiles 1" width="50" height="36">
   <data encoding="csv">
@@ -94,6 +94,15 @@
    <properties>
     <property name="dialogue_animal" value="Cot Cot !"/>
     <property name="npc_kind" value="animal"/>
+    <property name="solid" value=""/>
+   </properties>
+  </object>
+  <object id="19" type="npc" x="240" y="96" width="16" height="16">
+   <properties>
+    <property name="dialogue_animal" value="Bonjour !"/>
+    <property name="npc_kind" value="girl"/>
+    <property name="patrol_dx" type="float" value="128"/>
+    <property name="patrol_dy" type="float" value="0"/>
     <property name="solid" value=""/>
    </properties>
   </object>
