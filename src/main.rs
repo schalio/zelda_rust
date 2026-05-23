@@ -13,6 +13,7 @@ pub mod audio;
 pub mod objects;
 pub mod transition;
 pub mod npc;
+pub mod game;
 
 use audio::AudioManager;
 use camera::Camera;
@@ -25,7 +26,7 @@ use objects::{render_objects, resolve_chest_collision};
 use player::{DeathState, Player};
 use tile_properties::TileTable;
 use tilemap::Tilemap;
-use transition::{create_iris_texture, IrisTransition};
+use transition::create_iris_texture;
 
 use sdl2::event::Event;
 use sdl2::image::LoadTexture;
@@ -35,21 +36,22 @@ use sdl2::pixels::Color;
 use sdl2::rect::Rect;
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
+use crate::game::Game;
 
 const WINDOW_WIDTH: u32 = 800;
 const WINDOW_HEIGHT: u32 = 600;
 const TARGET_FPS: u64 = 60;
 const FRAME_DURATION_MICROS: u64 = 1_000_000 / TARGET_FPS;
 
+// ============================================================
+// Point d'entrée — uniquement l'init SDL2
+// ============================================================
 
 fn main() -> Result<(), String> {
     let sdl_context = sdl2::init()?;
 
     let ttf_context = sdl2::ttf::init()
         .map_err(|e| format!("Erreur init TTF: {e}"))?;
-
-    let mut audio = AudioManager::new()?;
-    audio.play_music("assets/music/dungeon.ogg")?;
 
     let video_subsystem = sdl_context.video()?;
 
@@ -66,7 +68,25 @@ fn main() -> Result<(), String> {
         .build()
         .map_err(|e| e.to_string())?;
 
+    let mut event_pump = sdl_context.event_pump()?;
+
+    run(&mut canvas, &mut event_pump, &ttf_context)
+}
+
+// ============================================================
+// run() — chargement des assets + boucle de jeu
+// ============================================================
+
+fn run(
+    mut canvas: &mut sdl2::render::Canvas<sdl2::video::Window>,
+    mut event_pump: &mut sdl2::EventPump,
+    ttf_context: &sdl2::ttf::Sdl2TtfContext,
+) -> Result<(), String> {
+
     let texture_creator = canvas.texture_creator();
+
+    let mut audio = AudioManager::new()?;
+    audio.play_music("assets/music/dungeon.ogg")?;
 
     // --- Chargement des textures ---
     let spritesheet = texture_creator.load_texture("assets/sprites/player.png")?;
@@ -81,6 +101,7 @@ fn main() -> Result<(), String> {
     let mut tileset  = texture_creator.load_texture(&tileset_png)?;
     let mut objects = map_file.objects.clone();
     let mut npcs = map_file.npcs.clone();
+
     let player_spawn = map_file.spawn_points.iter()
         .find(|sp| matches!(sp.kind, SpawnKind::Player))
         .expect("❌ Aucun spawn 'player' dans la map !");
@@ -100,7 +121,6 @@ fn main() -> Result<(), String> {
     // --- Caméra ---
     let mut camera = Camera::new(WINDOW_WIDTH, WINDOW_HEIGHT);
 
-    let mut event_pump = sdl_context.event_pump()?;
     let mut last_frame_time = Instant::now();
 
     // --- Chargement de la police ---
@@ -117,27 +137,20 @@ fn main() -> Result<(), String> {
         // player.max_hp,
     )?;
 
-    let mut collected_objects: HashMap<String, Vec<(i32, i32)>> = HashMap::new();
+    // -------------------------------------------------------
+    // État du jeu centralisé dans Game
+    // -------------------------------------------------------
 
-    let mut current_map_name = "zelda_test".to_string();
+    let mut game = Game::new();
 
-    let mut flash_timer: f32 = 0.0;
-    const FLASH_DURATION: f32 = 0.3;
-
-    let mut iris = IrisTransition::new();
-
-    // let mut active_dialogue: Option<String> = None;
-
-    let mut dialogue_pages: Vec<String> = Vec::new();
-    let mut dialogue_page: usize = 0;
-    let mut dialogue_close_cooldown: u32 = 0;
-
-    let mut interact_pressed_last_frame = false;
+    // ============================================================
+    // Boucle principale
+    // ============================================================
 
     'game_loop: loop {
         let now = Instant::now();
         let dt = now.duration_since(last_frame_time).as_secs_f32();
-        flash_timer = (flash_timer - dt).max(0.0);
+        game.flash_timer = (game.flash_timer - dt).max(0.0);
         last_frame_time = now;
 
         // --- Événements ---
@@ -160,10 +173,10 @@ fn main() -> Result<(), String> {
         // --- DÉCLENCHEMENT de la transition ---
         // let _map_to_load = iris.update(dt);
 
-        if !iris.is_active() && dialogue_pages.is_empty() {
-            if dialogue_close_cooldown > 0 {
-                dialogue_close_cooldown -= 1; // ← décompte ici
-            } else {
+        if !game.iris.is_active() && !game.dialogue.is_active() {
+            game.dialogue.tick_cooldown();
+
+            if game.dialogue.can_open() {
                 for i in 0..objects.len() {
                     let obj = &objects[i];
                     if !combat::player_touches_object(&player, obj) { continue; }
@@ -178,7 +191,7 @@ fn main() -> Result<(), String> {
                     match locked_val {
                         None => {
                             objects[i].collected = true;
-                            iris.start(target_map_val, target_entry_val);
+                            game.iris.start(target_map_val, target_entry_val);
                             break;
                         }
                         Some(key_kind) => {
@@ -188,7 +201,7 @@ fn main() -> Result<(), String> {
                                     player.use_key(key_kind);
                                     objects[i].collected = true;
                                 }
-                                iris.start(target_map_val, target_entry_val);
+                                game.iris.start(target_map_val, target_entry_val);
                             } else {
                                 let msg = match key_kind {
                                     KeyKind::Basic  => "Cette porte est verrouillée.\nIl te faut une clé.",
@@ -196,8 +209,8 @@ fn main() -> Result<(), String> {
                                     KeyKind::Gold   => "Cette porte requiert une clé d'or.",
                                     KeyKind::Boss   => "Cette porte mène au boss.\nIl te faut la clé du donjon.",
                                 };
-                                dialogue_pages = split_dialogue(msg);
-                                dialogue_page = 0;
+                                game.dialogue.pages = split_dialogue(msg);
+                                game.dialogue.current_page = 0;
 
                                 // Repousser le joueur
                                 use crate::tilemap::TILE_DRAW_SIZE;
@@ -217,13 +230,14 @@ fn main() -> Result<(), String> {
         }
 
         // --- RECHARGEMENT au moment où l'écran est noir ---
-        if let Some((target_map, target_entry)) = iris.update(dt) {
-            save_collected(&objects, &current_map_name, &mut collected_objects);
+        if let Some((target_map, target_entry)) = game.iris.update(dt) {
+            save_collected(&objects, &game.current_map_name, &mut game.collected_objects);
 
             let (new_map, new_table, new_png) = load_map(&target_map)?;
 
-            dialogue_pages.clear();
-            dialogue_page = 0;
+            // Fermer le dialogue proprement lors du changement de map
+            game.dialogue.pages.clear();
+            game.dialogue.current_page = 0;
 
             let entry = new_map.spawn_points.iter()
                 .find(|sp| sp.name == target_entry)
@@ -237,8 +251,8 @@ fn main() -> Result<(), String> {
             tileset  = texture_creator.load_texture(&new_png)?;
             objects  = new_map.objects.clone();
             npcs = new_map.npcs.clone();
-            apply_collected(&mut objects, &target_map, &collected_objects);
-            current_map_name = target_map;
+            apply_collected(&mut objects, &target_map, &game.collected_objects);
+            game.current_map_name = target_map;
 
             enemies = new_map.spawn_points.iter()
                 .filter_map(|sp| {
@@ -260,12 +274,12 @@ fn main() -> Result<(), String> {
         let interact_pressed =
             kb.is_scancode_pressed(sdl2::keyboard::Scancode::E) || kb.is_scancode_pressed(sdl2::keyboard::Scancode::Return);
 
-        let interact_just_pressed = interact_pressed && !interact_pressed_last_frame;
-        interact_pressed_last_frame = interact_pressed;
+        let interact_just_pressed = interact_pressed && !game.interact_pressed_last_frame;
+        game.interact_pressed_last_frame = interact_pressed;
 
-        update_npcs(&mut npcs, dt, player.x, player.y, ground_layer, &tile_table, !dialogue_pages.is_empty());
+        update_npcs(&mut npcs, dt, player.x, player.y, ground_layer, &tile_table, game.dialogue.is_active());
 
-        if !iris.is_active() && dialogue_pages.is_empty() {
+        if !game.iris.is_active() && !game.dialogue.is_active() {
             let player_events = player.update(dt, &kb, &ground_layer, &tile_table, &npcs);
             player.clamp_to_map(ground_layer.pixel_width(), ground_layer.pixel_height());
             if player_events.sword_swing {
@@ -274,13 +288,12 @@ fn main() -> Result<(), String> {
         }
 
         if interact_just_pressed {
-            if !dialogue_pages.is_empty() {
+            if game.dialogue.is_active() {
                 // Avancer à la page suivante ou fermer
-                dialogue_page += 1;
-                if dialogue_page >= dialogue_pages.len() {
-                    dialogue_pages.clear();
-                    dialogue_page = 0;
-                    dialogue_close_cooldown = 30;
+                game.dialogue.current_page += 1;
+                if game.dialogue.current_page >= game.dialogue.pages.len() {
+                    game.dialogue.close();
+
                     use crate::tilemap::TILE_DRAW_SIZE;
                     let push = TILE_DRAW_SIZE as f32 * 0.1;
                     match player.direction {
@@ -292,16 +305,16 @@ fn main() -> Result<(), String> {
                 }
             } else if let Some(npc_index) = find_npc_in_front(player.x, player.y, player.direction, &npcs) {
                 // if npcs[npc_index].waypoints.is_none() {
-                    dialogue_pages = split_dialogue(&npcs[npc_index].dialogue);
-                    dialogue_page = 0;
+                    game.dialogue.pages = split_dialogue(&npcs[npc_index].dialogue);
+                    game.dialogue.current_page = 0;
                 // }
             } else {
                 // Panneau
                 for obj in &objects {
                     if let ObjectKind::Sign { text } = &obj.kind {
                         if is_in_front_of_player(player.x, player.y, player.direction, obj.x, obj.y) {
-                            dialogue_pages = split_dialogue(text);
-                            dialogue_page = 0;
+                            game.dialogue.pages = split_dialogue(text);
+                            game.dialogue.current_page = 0;
                             break;
                         }
                     }
@@ -327,7 +340,7 @@ fn main() -> Result<(), String> {
             resolve_player_attack(&player, &mut enemies, &mut objects, &audio);
             resolve_bush_cut(&player, &mut objects);
             if resolve_object_contact(&mut player, &mut objects, &audio) {
-                flash_timer = FLASH_DURATION;
+                game.flash_timer = 0.3;
             }
 
             resolve_chest_collision(&mut player, &objects);
@@ -381,8 +394,8 @@ fn main() -> Result<(), String> {
         // player.render_hitbox(&mut canvas, &camera)?; // ← debug
 
         // Flash de collecte
-        if flash_timer > 0.0 {
-            let alpha = ((flash_timer / FLASH_DURATION) * 180.0) as u8;
+        if game.flash_timer > 0.0 {
+            let alpha = ((game.flash_timer / 0.3) * 180.0) as u8;
             canvas.set_draw_color(Color::RGBA(255, 255, 255, alpha));
             canvas.set_blend_mode(sdl2::render::BlendMode::Blend);
             canvas.fill_rect(Rect::new(0, 0, WINDOW_WIDTH, WINDOW_HEIGHT))?;
@@ -392,21 +405,21 @@ fn main() -> Result<(), String> {
         // 4. HUD — toujours en dernier, par-dessus tout
         hud.render(&mut canvas, player.hp, player.max_hp, player.rubies, player.keys_basic as i32)?;
 
-        if !dialogue_pages.is_empty() {
-            let is_last = dialogue_page >= dialogue_pages.len() - 1;
+        if game.dialogue.is_active() {
+            let is_last = game.dialogue.current_page >= game.dialogue.pages.len() - 1;
             render_dialogue_box(
                 &mut canvas, &texture_creator, &font,
-                &dialogue_pages[dialogue_page],
+                &game.dialogue.pages[game.dialogue.current_page],
                 is_last,
             )?;
         }
 
-        if iris.is_active() {
+        if game.iris.is_active() {
             let mask = create_iris_texture(
                 &texture_creator,
                 WINDOW_WIDTH,
                 WINDOW_HEIGHT,
-                iris.cur_radius,
+                game.iris.cur_radius,
             )?;
             canvas.copy(&mask, None, None)?;
         }
