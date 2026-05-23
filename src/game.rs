@@ -4,6 +4,16 @@ use std::collections::HashMap;
 use crate::transition::IrisTransition;
 
 // ============================================================
+// AppState — résultat retourné par main_menu()
+// ============================================================
+
+#[derive(Debug, PartialEq)]
+pub enum AppState {
+    Play,
+    Quit,
+}
+
+// ============================================================
 // DialogueState
 // ============================================================
 
