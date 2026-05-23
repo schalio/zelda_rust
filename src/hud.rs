@@ -33,6 +33,9 @@ const OBJ_SPRITE_SIZE: u32  = 16;
 const OBJ_DRAW_SIZE: u32    = 16;   // petite taille pour le HUD
 const COL_RUBY: i32         = 1;    // colonne rubis dans objects.png
 const COL_KEY:  i32         = 2;    // colonne clé dans objects.png
+const COL_KEY_SILVER: i32   = 10;
+const COL_KEY_GOLD:   i32   = 11;
+const COL_KEY_BOSS:   i32   = 12;
 
 /// Données précalculées pour le rendu du HUD.
 /// À créer une seule fois dans main() et réutiliser chaque frame.
@@ -147,7 +150,17 @@ impl<'a> Hud<'a> {
 
 
     /// Dessine le HUD complet : panneau + label + cœurs.
-    pub fn render(&self, canvas: &mut Canvas<Window>, hp: i32, max_hp: i32, rubies: i32, keys: i32) -> Result<(), String> {
+    pub fn render(
+        &self,
+        canvas: &mut Canvas<Window>,
+        hp: i32,
+        max_hp: i32,
+        rubies: i32,
+        keys_basic: i32,
+        keys_silver: i32,
+        keys_gold: i32,
+        keys_boss: i32,
+        ) -> Result<(), String> {
         // --- Calcul des dimensions du panneau ---
         let total_hearts = (max_hp + 1) / 2;
         let hearts_total_w = total_hearts * (HEART_DRAW_W as i32 + HEART_GAP) - HEART_GAP;
@@ -155,10 +168,22 @@ impl<'a> Hud<'a> {
 
         // Hauteur étendue pour rubis + clés
         let row_h     = OBJ_DRAW_SIZE + 4;
+
+        let extra_key_rows = [
+            (keys_silver, COL_KEY_SILVER),
+            (keys_gold,   COL_KEY_GOLD),
+            (keys_boss,   COL_KEY_BOSS),
+        ]
+            .iter()
+            .filter(|(count, _)| *count > 0)
+            .count() as u32;
+
         let panel_h   = self.label_h + HEART_DRAW_H
             + row_h         // ligne rubis
             + row_h         // ligne clés
-            + (PANEL_PAD_Y * 4) as u32;
+            + row_h * extra_key_rows
+            + (PANEL_PAD_Y * (4 + extra_key_rows as i32)) as u32;
+
         let panel_w   = content_w + (PANEL_PAD_X * 2) as u32;
 
         // --- Fond du panneau ---
@@ -206,9 +231,22 @@ impl<'a> Hud<'a> {
         let rubies_y = hearts_y + HEART_DRAW_H as i32 + PANEL_PAD_Y;
         self.render_counter(canvas, COL_RUBY, rubies, PANEL_X + PANEL_PAD_X, rubies_y)?;
 
-        // --- Ligne clés ---
+        // --- Ligne clé basic ---
         let keys_y = rubies_y + row_h as i32;
-        self.render_counter(canvas, COL_KEY, keys, PANEL_X + PANEL_PAD_X, keys_y)?;
+        self.render_counter(canvas, COL_KEY, keys_basic, PANEL_X + PANEL_PAD_X, keys_y)?;
+
+        // --- Clés spéciales (affichées seulement si > 0) ---
+        let mut next_y = keys_y + row_h as i32;
+        for (count, col) in [
+            (keys_silver, COL_KEY_SILVER),
+            (keys_gold,   COL_KEY_GOLD),
+            (keys_boss,   COL_KEY_BOSS),
+        ] {
+            if count > 0 {
+                self.render_counter(canvas, col, count, PANEL_X + PANEL_PAD_X, next_y)?;
+                next_y += row_h as i32;
+            }
+        }
 
         Ok(())
     }

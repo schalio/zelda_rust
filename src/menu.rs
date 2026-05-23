@@ -4,12 +4,16 @@ use sdl2::event::Event;
 use sdl2::keyboard::Keycode;
 use sdl2::pixels::Color;
 use sdl2::rect::Rect;
+use sdl2::image::LoadTexture;
 use std::time::{Duration, Instant};
 
 use crate::game::AppState;
 
 const WINDOW_WIDTH:  u32 = 800;
 const WINDOW_HEIGHT: u32 = 600;
+const MENU_TITLE: &str = "La Légende de Zelda";
+const MENU_BG: &str = "assets/sprites/menu_bg.png";
+
 
 pub fn main_menu(
     canvas: &mut sdl2::render::Canvas<sdl2::video::Window>,
@@ -18,7 +22,7 @@ pub fn main_menu(
 ) -> Result<AppState, String> {
 
     let font_title = ttf_context
-        .load_font("assets/fonts/zelda.ttf", 48)
+        .load_font("assets/fonts/zelda.ttf", 36)
         .map_err(|e| e.to_string())?;
 
     let font_item = ttf_context
@@ -28,9 +32,12 @@ pub fn main_menu(
     let items = ["Jouer", "Quitter"];
     let mut selected: usize = 0;
 
+    let texture_creator = canvas.texture_creator();
+    let bg_tex = texture_creator.load_texture(MENU_BG)?;
+
     // Pré-rendu du titre
     let title_surf = font_title
-        .render("Zelda-like Rust")
+        .render(MENU_TITLE)
         .blended(Color::RGB(255, 220, 50))
         .map_err(|e| e.to_string())?;
     let texture_creator = canvas.texture_creator();
@@ -75,8 +82,23 @@ pub fn main_menu(
         }
 
         // --- Rendu ---
-        canvas.set_draw_color(Color::RGB(10, 10, 20));
+        // canvas.set_draw_color(Color::RGB(10, 10, 20));
+        // canvas.clear();
+
+        // Fond centré avec proportions conservées
+        let bg_query = bg_tex.query();
+        let bg_w = bg_query.width as f32;
+        let bg_h = bg_query.height as f32;
+
+        let scale = (WINDOW_WIDTH as f32 / bg_w).min(WINDOW_HEIGHT as f32 / bg_h);
+        let dst_w = (bg_w * scale) as u32;
+        let dst_h = (bg_h * scale) as u32;
+        let dst_x = (WINDOW_WIDTH  as i32 - dst_w as i32) / 2;
+        let dst_y = (WINDOW_HEIGHT as i32 - dst_h as i32) / 2;
+
+        canvas.set_draw_color(Color::RGB(0, 0, 0));
         canvas.clear();
+        canvas.copy(&bg_tex, None, Some(Rect::new(dst_x, dst_y, dst_w, dst_h)))?;
 
         // Titre
         let tx = (WINDOW_WIDTH as i32 - title_w as i32) / 2;

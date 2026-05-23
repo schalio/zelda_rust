@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<map version="1.10" tiledversion="1.12.1" orientation="orthogonal" renderorder="right-down" width="50" height="36" tilewidth="16" tileheight="16" infinite="0" nextlayerid="4" nextobjectid="23">
+<map version="1.10" tiledversion="1.12.1" orientation="orthogonal" renderorder="right-down" width="50" height="36" tilewidth="16" tileheight="16" infinite="0" nextlayerid="4" nextobjectid="24">
  <tileset firstgid="1" source="zelda brouillon.tsx"/>
  <layer id="1" name="Calque de Tuiles 1" width="50" height="36">
   <data encoding="csv">
@@ -122,6 +122,12 @@ Le forgeron est à l'est. Bonne route !
     <property name="npc_kind" value="guy"/>
    </properties>
    <polygon points="0,0 -113,47 -191,176 -66,209 32,209"/>
+  </object>
+  <object id="23" type="key" x="440" y="551">
+   <properties>
+    <property name="key_kind" value="gold"/>
+   </properties>
+   <point/>
   </object>
  </objectgroup>
 </map>

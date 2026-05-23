@@ -28,9 +28,6 @@ use sdl_context::SdlBundle;
 const WINDOW_WIDTH: u32 = 800;
 const WINDOW_HEIGHT: u32 = 600;
 
-// ============================================================
-// Point d'entrée — uniquement l'init SDL2
-// ============================================================
 
 fn main() -> Result<(), String> {
     let mut sdl = SdlBundle::init("Zelda-like Rust", WINDOW_WIDTH, WINDOW_HEIGHT)?;

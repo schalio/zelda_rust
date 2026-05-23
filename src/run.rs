@@ -356,7 +356,16 @@ pub fn run(
         }
 
         // 4. HUD — toujours en dernier, par-dessus tout
-        hud.render(&mut canvas, player.hp, player.max_hp, player.rubies, player.keys_basic as i32)?;
+        hud.render(
+            &mut canvas,
+            player.hp,
+            player.max_hp,
+            player.rubies,
+            player.keys_basic  as i32,
+            player.keys_silver as i32,
+            player.keys_gold   as i32,
+            player.keys_boss   as i32,
+        )?;
 
         if game.dialogue.is_active() {
             let is_last = game.dialogue.current_page >= game.dialogue.pages.len() - 1;
