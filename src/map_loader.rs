@@ -269,12 +269,15 @@ pub fn load_tmx(path: &str) -> Result<MapFile, String> {
                 "bush"  => ObjectKind::Bush,
                 "chest" => {
                     let loot = match contains_prop {
-                        "heart" => LootKind::Heart,
-                        "key"          => LootKind::Key(KeyKind::Basic),
-                        "key_silver"   => LootKind::Key(KeyKind::Silver),
-                        "key_gold"     => LootKind::Key(KeyKind::Gold),
-                        "key_boss"     => LootKind::Key(KeyKind::Boss),
-                        _              => LootKind::Ruby,
+                        "heart"         => LootKind::Heart,
+                        "key"           => LootKind::Key(KeyKind::Basic),
+                        "key_silver"    => LootKind::Key(KeyKind::Silver),
+                        "key_gold"      => LootKind::Key(KeyKind::Gold),
+                        "key_boss"      => LootKind::Key(KeyKind::Boss),
+                        "ruby"          => LootKind::Ruby(RubyKind::Green),   // rétrocompatible
+                        "ruby_blue"     => LootKind::Ruby(RubyKind::Blue),
+                        "ruby_red"      => LootKind::Ruby(RubyKind::Red),
+                        _               => LootKind::Ruby(RubyKind::Green),
                     };
                     ObjectKind::Chest { contains: loot }
                 }
@@ -453,7 +456,7 @@ pub enum ObjectKind {
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum LootKind {
     Heart,
-    Ruby,
+    Ruby(RubyKind),
     Key(KeyKind),
 }
 

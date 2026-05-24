@@ -99,6 +99,16 @@ pub fn resolve_player_attack(player: &Player, enemies: &mut [Enemy], objects: &m
                     });
                 }
 
+                let heart_chance = if player.hp < player.max_hp { 0.15 } else { 0.05 };
+                if should_drop_heart(heart_chance) {
+                    to_spawn.push(MapObject {
+                        x: ex + 8.0,  // légèrement décalé pour ne pas superposer le rubis
+                        y: ey,
+                        kind: ObjectKind::Heart,
+                        collected: false,
+                    });
+                }
+
 
             } else if enemy.is_alive {
                 audio.play_hit_player();
@@ -205,7 +215,7 @@ pub fn resolve_object_contact(player: &mut Player, objects: &mut Vec<MapObject>,
                     y: obj.y - crate::tilemap::TILE_DRAW_SIZE as f32 * 0.5,
                     kind: match contains {
                         LootKind::Heart => ObjectKind::Heart,
-                        LootKind::Ruby  => ObjectKind::Ruby(RubyKind::Green),
+                        LootKind::Ruby(kind)  => ObjectKind::Ruby(kind),
                         LootKind::Key(k)   => ObjectKind::Key(k),
                     },
                     collected: false,
@@ -269,6 +279,11 @@ fn random_ruby_kind() -> RubyKind {
     } else {
         RubyKind::Red
     }
+}
+
+fn should_drop_heart(chance: f32) -> bool {
+    let mut rng = rand::rng();
+    rng.random::<f32>() < chance
 }
 
 pub fn player_touches_object(player: &Player, obj: &MapObject) -> bool {
