@@ -22,6 +22,7 @@ pub mod run;
 pub mod menu;
 pub mod sdl_context;
 pub mod save;
+pub mod pause;
 
 use crate::game::AppState;
 use sdl_context::SdlBundle;

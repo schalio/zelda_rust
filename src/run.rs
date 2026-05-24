@@ -121,6 +121,16 @@ pub fn run(
     // --- Flash sauvegarde ---
     let mut save_flash_timer = 0.0f32;
 
+    let save_flash_surf = font
+        .render("Sauvegarde !")
+        .blended(Color::RGBA(255, 255, 100, 220))
+        .map_err(|e| e.to_string())?;
+    let mut save_flash_tex = texture_creator
+        .create_texture_from_surface(&save_flash_surf)
+        .map_err(|e| e.to_string())?;
+    let save_flash_w = save_flash_tex.query().width;
+    let save_flash_h = save_flash_tex.query().height;
+
     // ============================================================
     // Boucle principale
     // ============================================================
@@ -131,6 +141,7 @@ pub fn run(
         game.flash_timer = (game.flash_timer - dt).max(0.0);
         save_flash_timer  = (save_flash_timer  - dt).max(0.0);
         last_frame_time = now;
+        let mut pause_requested = false;
 
         // --- Événements ---
         for event in event_pump.poll_iter() {
@@ -138,12 +149,7 @@ pub fn run(
                 Event::Quit { .. } => break 'game_loop,
 
                 Event::KeyDown { keycode: Some(Keycode::Escape), .. } => {
-                    // Sauvegarde en quittant
-                    let save = game.to_save(game.active_save_slot, &player);
-                    if let Err(e) = crate::save::save_game(&save) {
-                        eprintln!("⚠ Sauvegarde échouée: {e}");
-                    }
-                    break 'game_loop;
+                    pause_requested = true;
                 }
 
                 Event::KeyDown { keycode: Some(Keycode::M), .. } => {
@@ -156,11 +162,27 @@ pub fn run(
 
                 Event::KeyDown { keycode: Some(Keycode::F5), .. } => {
                     let save = game.to_save(game.active_save_slot, &player);
-                    if let Err(e) = crate::save::save_game(&save) {
-                        eprintln!("⚠ Sauvegarde échouée: {e}");
+                    match crate::save::save_game(&save) {
+                        Ok(_)  => save_flash_timer = 1.5,  // ← timer activé uniquement sur F5
+                        Err(e) => eprintln!("⚠ Sauvegarde échouée: {e}"),
                     }
                 }
                 _ => {}
+            }
+        }
+
+        if pause_requested {
+            use crate::pause::{pause_screen, PauseResult};
+            match pause_screen(canvas, event_pump, ttf_context)? {
+                PauseResult::Resume => {}
+                PauseResult::SaveAndResume => {
+                    let save = game.to_save(game.active_save_slot, &player);
+                    match crate::save::save_game(&save) {
+                        Ok(_)  => save_flash_timer = 1.5,
+                        Err(e) => eprintln!("⚠ Sauvegarde échouée: {e}"),
+                    }
+                }
+                PauseResult::MainMenu | PauseResult::Quit => break 'game_loop,
             }
         }
 
@@ -434,18 +456,22 @@ pub fn run(
         }
 
         // Flash "Sauvegardé !" (F5)
+        // Dans le rendu, remplacer le bloc flash actuel :
         if save_flash_timer > 0.0 {
-            let surf = font.render("💾 Sauvegardé !")
-                .blended(Color::RGBA(255, 255, 100, 220))
-                .map_err(|e| e.to_string())?;
-            let tex = texture_creator.create_texture_from_surface(&surf)
-                .map_err(|e| e.to_string())?;
-            let q = tex.query();
-            canvas.copy(&tex, None, Some(Rect::new(
-                (WINDOW_WIDTH as i32 - q.width as i32) / 2,
-                WINDOW_HEIGHT as i32 - 40,
-                q.width,
-                q.height,
+            // Fondu : opaque pendant 1s, puis disparaît sur 0.5s
+            let alpha = if save_flash_timer > 0.5 {
+                220u8
+            } else {
+                (save_flash_timer / 0.5 * 220.0) as u8
+            };
+
+            // Utiliser set_alpha_mod sur la texture
+            save_flash_tex.set_alpha_mod(alpha);
+            canvas.copy(&save_flash_tex, None, Some(Rect::new(
+                (WINDOW_WIDTH as i32 - save_flash_w as i32) / 2,
+                WINDOW_HEIGHT as i32 - 60,
+                save_flash_w,
+                save_flash_h,
             )))?;
         }
 

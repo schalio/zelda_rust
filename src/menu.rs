@@ -236,6 +236,8 @@ pub fn select_slot(
 
     loop {
         let mut action: Option<usize> = None;
+        let mut delete_slot: Option<u8> = None;
+
         for event in event_pump.poll_iter() {
             match event {
                 Event::Quit { .. } => return Ok(MenuResult::Quit),
@@ -250,11 +252,30 @@ pub fn select_slot(
                     Keycode::Return | Keycode::Space => {
                         action = Some(selected);
                     }
+                    Keycode::Delete | Keycode::Backspace => {
+                        if selected >= 1 && selected <= 3 {
+                            if slots[selected - 1].is_some() {
+                                delete_slot = Some(selected as u8);
+                            }
+                        }
+                    }
                     _ => {}
                 },
                 _ => {}
             }
         }
+
+        if let Some(slot) = delete_slot {
+            if confirm_delete(canvas, event_pump, ttf_context, slot)? {
+                if let Err(e) = crate::save::delete_save(slot) {
+                    eprintln!("⚠ Impossible de supprimer le slot {slot}: {e}");
+                } else {
+                    // Recharger les slots pour refléter la suppression
+                    return select_slot(canvas, event_pump, ttf_context);
+                }
+            }
+        }
+
 
         // Traitement de l'action APRÈS la boucle d'événements
         if let Some(sel) = action {
@@ -414,6 +435,84 @@ fn pick_slot_to_overwrite(
                             Some(Rect::new((WINDOW_WIDTH as i32 - iw as i32) / 2, y + h as i32 + 4, iw, ih)))?;
             }
         }
+
+        canvas.present();
+        std::thread::sleep(Duration::from_millis(16));
+    }
+}
+
+/// Retourne true si l'utilisateur confirme la suppression.
+fn confirm_delete(
+    canvas: &mut sdl2::render::Canvas<sdl2::video::Window>,
+    event_pump: &mut sdl2::EventPump,
+    ttf_context: &sdl2::ttf::Sdl2TtfContext,
+    slot: u8,
+) -> Result<bool, String> {
+
+    let font = ttf_context.load_font("assets/fonts/zelda.ttf", 18)
+        .map_err(|e| e.to_string())?;
+
+    let texture_creator = canvas.texture_creator();
+
+    let title_text = format!("Effacer le slot {} ?", slot);
+    let title_surf = font.render(&title_text)
+        .blended(Color::RGB(255, 100, 100))
+        .map_err(|e| e.to_string())?;
+    let title_tex = texture_creator.create_texture_from_surface(&title_surf)
+        .map_err(|e| e.to_string())?;
+    let (tw, th) = (title_tex.query().width, title_tex.query().height);
+
+    let yes_surf = font.render("Oui  (O)")
+        .blended(Color::RGB(255, 220, 50))
+        .map_err(|e| e.to_string())?;
+    let yes_tex = texture_creator.create_texture_from_surface(&yes_surf)
+        .map_err(|e| e.to_string())?;
+    let (yw, yh) = (yes_tex.query().width, yes_tex.query().height);
+
+    let no_surf = font.render("Non  (N / Echap)")
+        .blended(Color::RGB(160, 160, 160))
+        .map_err(|e| e.to_string())?;
+    let no_tex = texture_creator.create_texture_from_surface(&no_surf)
+        .map_err(|e| e.to_string())?;
+    let (nw, nh) = (no_tex.query().width, no_tex.query().height);
+
+    loop {
+        let mut action: Option<bool> = None;
+
+        for event in event_pump.poll_iter() {
+            match event {
+                Event::Quit { .. } => return Ok(false),
+                Event::KeyDown { keycode: Some(kc), .. } => match kc {
+                    Keycode::O => action = Some(true),
+                    Keycode::N | Keycode::Escape => action = Some(false),
+                    _ => {}
+                },
+                _ => {}
+            }
+        }
+
+        if let Some(confirmed) = action {
+            return Ok(confirmed);
+        }
+
+        canvas.set_draw_color(Color::RGB(10, 10, 20));
+        canvas.clear();
+
+        let cx = WINDOW_WIDTH as i32 / 2;
+        let cy = WINDOW_HEIGHT as i32 / 2;
+
+        // Fond de la boîte
+        canvas.set_draw_color(Color::RGB(30, 20, 20));
+        canvas.fill_rect(Rect::new(cx - 200, cy - 80, 400, 160))?;
+        canvas.set_draw_color(Color::RGB(180, 60, 60));
+        canvas.draw_rect(Rect::new(cx - 200, cy - 80, 400, 160))?;
+
+        // Titre
+        canvas.copy(&title_tex, None, Some(Rect::new(cx - tw as i32 / 2, cy - 60, tw, th)))?;
+        // Oui
+        canvas.copy(&yes_tex, None, Some(Rect::new(cx - yw as i32 / 2, cy, yw, yh)))?;
+        // Non
+        canvas.copy(&no_tex, None, Some(Rect::new(cx - nw as i32 / 2, cy + 40, nw, nh)))?;
 
         canvas.present();
         std::thread::sleep(Duration::from_millis(16));
