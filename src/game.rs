@@ -61,6 +61,7 @@ pub struct Game {
     pub interact_pressed_last_frame: bool,
     pub iris: IrisTransition,
     pub collected_objects: HashMap<String, Vec<(i32, i32)>>,
+    pub active_save_slot: u8,
 }
 
 impl Game {
@@ -72,6 +73,39 @@ impl Game {
             interact_pressed_last_frame: false,
             iris: IrisTransition::new(),
             collected_objects: HashMap::new(),
+            active_save_slot: 0,
         }
     }
+
+    // Dans impl Game :
+
+    pub fn to_save(&self, slot: u8, player: &crate::player::Player) -> crate::save::SaveData {
+        crate::save::SaveData {
+            slot,
+            hp:                player.hp,
+            max_hp:            player.max_hp,
+            rubies:            player.rubies,
+            keys_basic:        player.keys_basic,
+            keys_silver:       player.keys_silver,
+            keys_gold:         player.keys_gold,
+            keys_boss:         player.keys_boss,
+            current_map:       self.current_map_name.clone(),
+            collected_objects: self.collected_objects.clone(),
+        }
+    }
+
+    pub fn apply_save(&mut self, data: &crate::save::SaveData, player: &mut crate::player::Player) {
+        player.hp          = data.hp;
+        player.max_hp      = data.max_hp;
+        player.rubies      = data.rubies;
+        player.keys_basic  = data.keys_basic;
+        player.keys_silver = data.keys_silver;
+        player.keys_gold   = data.keys_gold;
+        player.keys_boss   = data.keys_boss;
+        self.current_map_name    = data.current_map.clone();
+        self.collected_objects   = data.collected_objects.clone();
+        self.active_save_slot    = data.slot;
+    }
+
+
 }
