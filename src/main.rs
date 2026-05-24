@@ -21,6 +21,7 @@ pub mod rendering;
 pub mod run;
 pub mod menu;
 pub mod sdl_context;
+pub mod save;
 
 use crate::game::AppState;
 use sdl_context::SdlBundle;
@@ -35,7 +36,15 @@ fn main() -> Result<(), String> {
     loop {
         match menu::main_menu(&mut sdl.canvas, &mut sdl.event_pump, &sdl.ttf_context)? {
             AppState::Play => {
-                run::run(&mut sdl.canvas, &mut sdl.event_pump, &sdl.ttf_context)?;
+                match menu::select_slot(&mut sdl.canvas, &mut sdl.event_pump, &sdl.ttf_context)? {
+                    menu::MenuResult::NewGame(slot) => {
+                        run::run(&mut sdl.canvas, &mut sdl.event_pump, &sdl.ttf_context, slot, None)?;
+                    }
+                    menu::MenuResult::Continue(slot, data) => {
+                        run::run(&mut sdl.canvas, &mut sdl.event_pump, &sdl.ttf_context, slot, Some(data))?;
+                    }
+                    menu::MenuResult::Quit => break,
+                }
             }
             AppState::Quit => break,
         }

@@ -7,12 +7,19 @@ use sdl2::rect::Rect;
 use sdl2::image::LoadTexture;
 use std::time::{Duration, Instant};
 
+use crate::save::{list_slots, SaveData};
 use crate::game::AppState;
 
 const WINDOW_WIDTH:  u32 = 800;
 const WINDOW_HEIGHT: u32 = 600;
 const MENU_TITLE: &str = "La Légende de Zelda";
 const MENU_BG: &str = "assets/sprites/menu_bg.png";
+
+pub enum MenuResult {
+    NewGame(u8),          // slot choisi pour nouvelle partie
+    Continue(u8, SaveData), // slot + données
+    Quit,
+}
 
 
 pub fn main_menu(
@@ -149,6 +156,108 @@ pub fn main_menu(
                         sdl2::rect::Point::new(cx + width, cy + row),
                     )?;
                 }
+            }
+        }
+
+        canvas.present();
+        std::thread::sleep(Duration::from_millis(16));
+    }
+}
+
+
+pub fn select_slot(
+    canvas: &mut sdl2::render::Canvas<sdl2::video::Window>,
+    event_pump: &mut sdl2::EventPump,
+    ttf_context: &sdl2::ttf::Sdl2TtfContext,
+) -> Result<MenuResult, String> {
+
+    let font = ttf_context.load_font("assets/fonts/zelda.ttf", 14)
+        .map_err(|e| e.to_string())?;
+    let font_small = ttf_context.load_font("assets/fonts/zelda.ttf", 10)
+        .map_err(|e| e.to_string())?;
+
+    let slots = list_slots();
+    let mut selected: usize = 0;
+    // 0 = Nouveau, 1-3 = slots, 4 = Quitter
+    let item_count = 5;
+
+    loop {
+        for event in event_pump.poll_iter() {
+            match event {
+                Event::Quit { .. } => return Ok(MenuResult::Quit),
+                Event::KeyDown { keycode: Some(kc), .. } => match kc {
+                    Keycode::Escape => return Ok(MenuResult::Quit),
+                    Keycode::Up | Keycode::W => {
+                        if selected > 0 { selected -= 1; }
+                    }
+                    Keycode::Down | Keycode::S => {
+                        if selected + 1 < item_count { selected += 1; }
+                    }
+                    Keycode::Return | Keycode::Space => {
+                        match selected {
+                            0 => {
+                                // Nouvelle partie : choisir le slot libre ou écraser
+                                let free_slot = slots.iter().position(|s| s.is_none())
+                                    .map(|i| i as u8 + 1)
+                                    .unwrap_or(1);
+                                return Ok(MenuResult::NewGame(free_slot));
+                            }
+                            1..=3 => {
+                                let slot = selected as u8;
+                                if let Some(ref data) = slots[selected - 1] {
+                                    return Ok(MenuResult::Continue(slot, data.clone()));
+                                } else {
+                                    return Ok(MenuResult::NewGame(slot));
+                                }
+                            }
+                            _ => return Ok(MenuResult::Quit),
+                        }
+                    }
+                    _ => {}
+                },
+                _ => {}
+            }
+        }
+
+        canvas.set_draw_color(Color::RGB(10, 10, 20));
+        canvas.clear();
+
+        let labels = ["Nouvelle partie", "Slot 1", "Slot 2", "Slot 3", "Quitter"];
+        let start_y = 80i32;
+        let spacing = 90i32;
+        let texture_creator = canvas.texture_creator();
+
+        for (i, label) in labels.iter().enumerate() {
+            let color = if i == selected {
+                Color::RGB(255, 220, 50)
+            } else {
+                Color::RGB(160, 160, 160)
+            };
+
+            // Titre du slot
+            let surf = font.render(label).blended(color).map_err(|e| e.to_string())?;
+            let tex  = texture_creator.create_texture_from_surface(&surf).map_err(|e| e.to_string())?;
+            let (w, h) = (tex.query().width, tex.query().height);
+            let x = (WINDOW_WIDTH as i32 - w as i32) / 2;
+            let y = start_y + i as i32 * spacing;
+            canvas.copy(&tex, None, Some(Rect::new(x, y, w, h)))?;
+
+            // Infos du slot (si existe)
+            if i >= 1 && i <= 3 {
+                let info = if let Some(ref data) = slots[i - 1] {
+                    format!("Map: {}   Rubis: {}", data.current_map, data.rubies)
+                } else {
+                    "(vide)".to_string()
+                };
+                let info_surf = font_small.render(&info)
+                    .blended(Color::RGB(120, 120, 120))
+                    .map_err(|e| e.to_string())?;
+                let info_tex = texture_creator
+                    .create_texture_from_surface(&info_surf)
+                    .map_err(|e| e.to_string())?;
+                let (iw, ih) = (info_tex.query().width, info_tex.query().height);
+                let ix = (WINDOW_WIDTH as i32 - iw as i32) / 2;
+                canvas.copy(&info_tex, None, Some(Rect::new(ix, y + h as i32 + 4, iw, ih)))?;
             }
         }
 

@@ -33,6 +33,8 @@ pub fn run(
     mut canvas: &mut sdl2::render::Canvas<sdl2::video::Window>,
     mut event_pump: &mut sdl2::EventPump,
     ttf_context: &sdl2::ttf::Sdl2TtfContext,
+    save_slot: u8,
+    save_data: Option<crate::save::SaveData>,
 ) -> Result<(), String> {
 
 
@@ -49,17 +51,36 @@ pub fn run(
     let objects_sheet = texture_creator.load_texture("assets/sprites/objects.png")?;
     let npc_texture = texture_creator.load_texture("assets/sprites/npcs.png")?;
 
+    // -------------------------------------------------------
+    // État du jeu
+    // -------------------------------------------------------
+
+    let mut game = Game::new();
+    game.active_save_slot = save_slot;
+
+    // --- Map de départ ---
+    let start_map = save_data.as_ref()
+        .map(|d| d.current_map.clone())
+        .unwrap_or_else(|| "zelda_test".to_string());
+
     // --- Chargement Tiled ---
     let (mut map_file, mut tile_table, tileset_png) = load_map("zelda_test")?;
     let mut tileset  = texture_creator.load_texture(&tileset_png)?;
     let mut objects = map_file.objects.clone();
     let mut npcs = map_file.npcs.clone();
+    game.current_map_name = start_map.clone();
 
     let player_spawn = map_file.spawn_points.iter()
         .find(|sp| matches!(sp.kind, SpawnKind::Player))
         .expect("❌ Aucun spawn 'player' dans la map !");
 
     let mut player = Player::new(player_spawn.x, player_spawn.y);
+
+    // --- Appliquer sauvegarde si Continuer ---
+    if let Some(ref data) = save_data {
+        game.apply_save(data, &mut player);
+        apply_collected(&mut objects, &start_map, &game.collected_objects);
+    }
 
     let mut enemies: Vec<Enemy> = map_file.spawn_points.iter()
         .filter_map(|sp| {
@@ -90,11 +111,8 @@ pub fn run(
         // player.max_hp,
     )?;
 
-    // -------------------------------------------------------
-    // État du jeu centralisé dans Game
-    // -------------------------------------------------------
-
-    let mut game = Game::new();
+    // --- Flash sauvegarde ---
+    let mut save_flash_timer = 0.0f32;
 
     // ============================================================
     // Boucle principale
@@ -104,13 +122,23 @@ pub fn run(
         let now = Instant::now();
         let dt = now.duration_since(last_frame_time).as_secs_f32();
         game.flash_timer = (game.flash_timer - dt).max(0.0);
+        save_flash_timer  = (save_flash_timer  - dt).max(0.0);
         last_frame_time = now;
 
         // --- Événements ---
         for event in event_pump.poll_iter() {
             match event {
                 Event::Quit { .. } => break 'game_loop,
-                Event::KeyDown { keycode: Some(Keycode::Escape), .. } => break 'game_loop,
+
+                Event::KeyDown { keycode: Some(Keycode::Escape), .. } => {
+                    // Sauvegarde en quittant
+                    let save = game.to_save(game.active_save_slot, &player);
+                    if let Err(e) = crate::save::save_game(&save) {
+                        eprintln!("⚠ Sauvegarde échouée: {e}");
+                    }
+                    break 'game_loop;
+                }
+
                 Event::KeyDown { keycode: Some(Keycode::M), .. } => {
                     if mixer::Music::is_paused() {
                         audio.resume_music();
@@ -119,6 +147,12 @@ pub fn run(
                     }
                 }
 
+                Event::KeyDown { keycode: Some(Keycode::F5), .. } => {
+                    let save = game.to_save(game.active_save_slot, &player);
+                    if let Err(e) = crate::save::save_game(&save) {
+                        eprintln!("⚠ Sauvegarde échouée: {e}");
+                    }
+                }
                 _ => {}
             }
         }
@@ -185,6 +219,12 @@ pub fn run(
         // --- RECHARGEMENT au moment où l'écran est noir ---
         if let Some((target_map, target_entry)) = game.iris.update(dt) {
             save_collected(&objects, &game.current_map_name, &mut game.collected_objects);
+
+            // 💾 Sauvegarde automatique à chaque transition
+            let save = game.to_save(game.active_save_slot, &player);
+            if let Err(e) = crate::save::save_game(&save) {
+                eprintln!("⚠ Sauvegarde automatique échouée: {e}");
+            }
 
             let (new_map, new_table, new_png) = load_map(&target_map)?;
 
@@ -386,6 +426,21 @@ pub fn run(
             canvas.copy(&mask, None, None)?;
         }
 
+        // Flash "Sauvegardé !" (F5)
+        if save_flash_timer > 0.0 {
+            let surf = font.render("💾 Sauvegardé !")
+                .blended(Color::RGBA(255, 255, 100, 220))
+                .map_err(|e| e.to_string())?;
+            let tex = texture_creator.create_texture_from_surface(&surf)
+                .map_err(|e| e.to_string())?;
+            let q = tex.query();
+            canvas.copy(&tex, None, Some(Rect::new(
+                (WINDOW_WIDTH as i32 - q.width as i32) / 2,
+                WINDOW_HEIGHT as i32 - 40,
+                q.width,
+                q.height,
+            )))?;
+        }
 
         canvas.present();
 
