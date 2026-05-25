@@ -17,6 +17,7 @@ pub struct SaveData {
     pub keys_boss:         u32,
     pub current_map:       String,
     pub collected_objects: HashMap<String, Vec<(i32, i32)>>,
+    pub heart_pieces:       u8,
 }
 
 fn slot_path(slot: u8) -> String {

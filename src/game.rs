@@ -91,6 +91,7 @@ impl Game {
             keys_boss:         player.keys_boss,
             current_map:       self.current_map_name.clone(),
             collected_objects: self.collected_objects.clone(),
+            heart_pieces:      player.heart_pieces,
         }
     }
 
@@ -102,6 +103,7 @@ impl Game {
         player.keys_silver = data.keys_silver;
         player.keys_gold   = data.keys_gold;
         player.keys_boss   = data.keys_boss;
+        player.heart_pieces = data.heart_pieces;
         self.current_map_name    = data.current_map.clone();
         self.collected_objects   = data.collected_objects.clone();
         self.active_save_slot    = data.slot;

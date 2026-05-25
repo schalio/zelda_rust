@@ -134,6 +134,7 @@ pub struct Player {
     pub keys_silver: u32,
     pub keys_gold:   u32,
     pub keys_boss:   u32,
+    pub heart_pieces: u8,
 }
 
 impl Player {
@@ -165,6 +166,7 @@ impl Player {
             keys_silver: 0,
             keys_gold:   0,
             keys_boss:   0,
+            heart_pieces: 0,
         }
     }
 

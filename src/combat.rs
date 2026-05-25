@@ -223,10 +223,14 @@ pub fn resolve_object_contact(player: &mut Player, objects: &mut Vec<MapObject>,
             }
             ObjectKind::Transition { .. } => {}
             ObjectKind::HeartPiece => {
-                player.max_hp += 2;
-                player.hp = (player.hp + 2).min(player.max_hp); // soigne aussi
                 obj.collected = true;
-                audio.play_pickup_heart(); // son dédié ou réutilisez heart
+                audio.play_pickup_heart();
+                player.heart_pieces += 1;
+                if player.heart_pieces >= 4 {
+                    player.heart_pieces = 0;
+                    player.max_hp += 2;
+                    player.hp = player.max_hp;  // soigne à 100%
+                }
                 collected = true;
             }
             ObjectKind::Bush => { }

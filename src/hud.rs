@@ -160,6 +160,7 @@ impl<'a> Hud<'a> {
         keys_silver: i32,
         keys_gold: i32,
         keys_boss: i32,
+        heart_pieces: u8,
         ) -> Result<(), String> {
         // --- Calcul des dimensions du panneau ---
         let total_hearts = (max_hp + 1) / 2;
@@ -178,11 +179,14 @@ impl<'a> Hud<'a> {
             .filter(|(count, _)| *count > 0)
             .count() as u32;
 
+        let heart_pieces_row = if heart_pieces > 0 { row_h } else { 0 };
+
         let panel_h   = self.label_h + HEART_DRAW_H
+            + heart_pieces_row
             + row_h         // ligne rubis
             + row_h         // ligne clés
             + row_h * extra_key_rows
-            + (PANEL_PAD_Y * (4 + extra_key_rows as i32)) as u32;
+            + (PANEL_PAD_Y * (4 + extra_key_rows as i32 + if heart_pieces > 0 { 1 } else { 0 })) as u32;
 
         let panel_w   = content_w + (PANEL_PAD_X * 2) as u32;
 
@@ -227,8 +231,31 @@ impl<'a> Hud<'a> {
             canvas.copy(&self.hearts_texture, Some(src), Some(dst))?;
         }
 
+        // --- Pièces de cœur (si > 0) ---
+        let pieces_y = hearts_y + HEART_DRAW_H as i32 + PANEL_PAD_Y;
+        if heart_pieces > 0 {
+            // Sprite HeartPiece = colonne 5 dans objects.png
+            let src = Rect::new(5 * OBJ_SPRITE_SIZE as i32, 0, OBJ_SPRITE_SIZE, OBJ_SPRITE_SIZE);
+            canvas.copy(
+                &self.objects_texture,
+                Some(src),
+                Some(Rect::new(PANEL_X + PANEL_PAD_X, pieces_y, OBJ_DRAW_SIZE, OBJ_DRAW_SIZE)),
+            )?;
+            // Compteur "x N/4"
+            let idx = heart_pieces.clamp(0, 3) as usize;
+            // On réutilise digits mais on veut "1/4", "2/4", etc.
+            // Option simple : afficher le chiffre seul avec digits[idx]
+            let (ref tex, w, h) = self.digits[idx];
+            canvas.copy(tex, None, Some(Rect::new(
+                PANEL_X + PANEL_PAD_X + OBJ_DRAW_SIZE as i32 + 3,
+                pieces_y + (OBJ_DRAW_SIZE as i32 - h as i32) / 2,
+                w, h,
+            )))?;
+        }
+
         // --- Ligne rubis ---
-        let rubies_y = hearts_y + HEART_DRAW_H as i32 + PANEL_PAD_Y;
+        // let rubies_y = hearts_y + HEART_DRAW_H as i32 + PANEL_PAD_Y;
+        let rubies_y = pieces_y + if heart_pieces > 0 { row_h as i32 } else { 0 };
         self.render_counter(canvas, COL_RUBY, rubies, PANEL_X + PANEL_PAD_X, rubies_y)?;
 
         // --- Ligne clé basic ---

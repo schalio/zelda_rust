@@ -43,6 +43,7 @@ pub fn save_collected(
             ObjectKind::HeartPiece
             | ObjectKind::Chest { .. }
             | ObjectKind::Transition { .. }
+            | ObjectKind::Key(..)
         ))
         .map(|o| (o.x as i32, o.y as i32))
         .collect();
@@ -62,6 +63,7 @@ pub fn apply_collected(
                 ObjectKind::HeartPiece
                 | ObjectKind::Chest { .. }
                 | ObjectKind::Transition { .. }
+                | ObjectKind::Key(..)
             ) {
                 if coords.contains(&(obj.x as i32, obj.y as i32)) {
                     obj.collected = true;

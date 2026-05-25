@@ -161,6 +161,7 @@ pub fn run(
                 }
 
                 Event::KeyDown { keycode: Some(Keycode::F5), .. } => {
+                    save_collected(&objects, &game.current_map_name, &mut game.collected_objects);
                     let save = game.to_save(game.active_save_slot, &player);
                     match crate::save::save_game(&save) {
                         Ok(_)  => save_flash_timer = 1.5,  // ← timer activé uniquement sur F5
@@ -176,6 +177,7 @@ pub fn run(
             match pause_screen(canvas, event_pump, ttf_context)? {
                 PauseResult::Resume => {}
                 PauseResult::SaveAndResume => {
+                    save_collected(&objects, &game.current_map_name, &mut game.collected_objects);
                     let save = game.to_save(game.active_save_slot, &player);
                     match crate::save::save_game(&save) {
                         Ok(_)  => save_flash_timer = 1.5,
@@ -250,11 +252,11 @@ pub fn run(
             save_collected(&objects, &game.current_map_name, &mut game.collected_objects);
 
             // 💾 Sauvegarde automatique à chaque transition
-            let save = game.to_save(game.active_save_slot, &player);
+        /*    let save = game.to_save(game.active_save_slot, &player);
             if let Err(e) = crate::save::save_game(&save) {
                 eprintln!("⚠ Sauvegarde automatique échouée: {e}");
             }
-
+        */
             let (new_map, new_table, new_png) = load_map(&target_map)?;
 
             // Fermer le dialogue proprement lors du changement de map
@@ -434,6 +436,7 @@ pub fn run(
             player.keys_silver as i32,
             player.keys_gold   as i32,
             player.keys_boss   as i32,
+            player.heart_pieces,
         )?;
 
         if game.dialogue.is_active() {
