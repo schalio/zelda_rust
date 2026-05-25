@@ -23,6 +23,7 @@ use crate::rendering::render_dialogue_box;
 use crate::screens::game_over_screen;
 use crate::transition::create_iris_texture;
 use crate::utils::{is_in_front_of_player, separate_enemies, split_dialogue};
+use crate::inventory::inventory_screen;
 
 const WINDOW_WIDTH:  u32 = 800;
 const WINDOW_HEIGHT: u32 = 600;
@@ -71,7 +72,7 @@ pub fn run(
         .unwrap_or_else(|| "zelda_test".to_string());
 
     // --- Chargement Tiled ---
-    let (mut map_file, mut tile_table, tileset_png) = load_map("zelda_test")?;
+    let (mut map_file, mut tile_table, tileset_png) = load_map(&start_map)?;
     let mut tileset  = texture_creator.load_texture(&tileset_png)?;
     let mut objects = map_file.objects.clone();
     let mut npcs = map_file.npcs.clone();
@@ -142,6 +143,7 @@ pub fn run(
         save_flash_timer  = (save_flash_timer  - dt).max(0.0);
         last_frame_time = now;
         let mut pause_requested = false;
+        let mut open_inventory = false;
 
         // --- Événements ---
         for event in event_pump.poll_iter() {
@@ -150,6 +152,10 @@ pub fn run(
 
                 Event::KeyDown { keycode: Some(Keycode::Escape), .. } => {
                     pause_requested = true;
+                }
+
+                Event::KeyDown { keycode: Some(Keycode::I), .. } => {
+                    open_inventory = true;
                 }
 
                 Event::KeyDown { keycode: Some(Keycode::M), .. } => {
@@ -170,6 +176,10 @@ pub fn run(
                 }
                 _ => {}
             }
+        }
+
+        if open_inventory {
+            inventory_screen(&mut canvas, &mut event_pump, &player)?;
         }
 
         if pause_requested {
